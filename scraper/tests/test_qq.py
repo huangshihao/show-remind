@@ -12,7 +12,7 @@ FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "qq_playlist_raw.json
 
 def test_transform_reads_title_and_songs():
     out = transform_qq_playlist(FIXTURE)
-    assert out.title == "我的摇滚歌单"
+    assert out.title == "摇滚精神 · 身临其境的叙事现场"
     assert len(out.songs) == 3
     assert out.songs[0].name == "杀死那个石家庄人"
     assert out.songs[0].artists == ["万能青年旅店"]
@@ -32,5 +32,5 @@ def test_endpoint_returns_camelcase(monkeypatch):
     resp = client.get("/qq/playlist/123456")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["title"] == "我的摇滚歌单"
+    assert body["title"] == "摇滚精神 · 身临其境的叙事现场"
     assert body["songs"][0]["artists"] == ["万能青年旅店"]
