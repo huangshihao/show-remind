@@ -4,7 +4,7 @@ from typing import Any
 import httpx
 from fastapi import HTTPException
 
-from app.models import CityShowsOut, ShowSummaryOut
+from app.models import CityShowsOut, ShowDetailOut, ShowSummaryOut
 
 WAP_BASE = "https://wap.showstart.com"
 DETAIL_URL = WAP_BASE + "/pages/activity/detail/detail?activityId={id}"
@@ -81,3 +81,36 @@ async def get_city_shows(city_code: str, page: int) -> CityShowsOut:
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"showstart list failed: {exc}") from exc
     return transform_show_list(raw, city_code)
+
+
+def _detail_body(raw: dict[str, Any]) -> dict[str, Any]:
+    return raw.get("data") or raw
+
+
+def _performers(body: dict[str, Any]) -> list[str]:
+    performers = body.get("performers") or body.get("artists") or []
+    return [p.get("name") for p in performers if isinstance(p, dict) and p.get("name")]
+
+
+def transform_show_detail(raw: dict[str, Any]) -> ShowDetailOut:
+    body = _detail_body(raw)
+    activity_id = str(body.get("activityId") or body.get("id") or "")
+    return ShowDetailOut(
+        showstart_id=activity_id,
+        title=body.get("title") or "",
+        city_code=str(body.get("cityCode") or ""),
+        venue=body.get("siteName") or body.get("venue"),
+        show_time=_normalize_time(body.get("showTime")),
+        price=body.get("price"),
+        url=DETAIL_URL.format(id=activity_id),
+        performers=_performers(body),
+    )
+
+
+async def get_show_detail(show_id: str) -> ShowDetailOut:
+    client = ShowstartClient()
+    try:
+        raw = await client.fetch_show_detail_raw(show_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"showstart detail failed: {exc}") from exc
+    return transform_show_detail(raw)

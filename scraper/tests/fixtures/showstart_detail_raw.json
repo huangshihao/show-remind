@@ -1,0 +1,15 @@
+{
+  "state": 1,
+  "data": {
+    "activityId": 100001,
+    "title": "万能青年旅店 2026 巡演 上海站",
+    "cityCode": "310000",
+    "siteName": "MAO Livehouse (上海)",
+    "showTime": "2026-08-01 20:00:00",
+    "price": "180-380",
+    "performers": [
+      { "name": "万能青年旅店" },
+      { "name": "特邀嘉宾" }
+    ]
+  }
+}
