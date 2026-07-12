@@ -41,8 +41,18 @@ model Playlist {
   createdAt     DateTime  @default(now()) @map("created_at")
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userArtists   UserArtist[]
+  tally         PlaylistTally[]
   @@unique([userId, platform, externalId])
   @@map("playlists")
+}
+
+model PlaylistTally {
+  id         String   @id @default(cuid())
+  playlistId String   @map("playlist_id")
+  name       String
+  songCount  Int      @map("song_count")
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  @@map("playlist_tallies")
 }
 
 model Artist {
