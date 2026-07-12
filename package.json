@@ -9,21 +9,28 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "worker": "tsx worker.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.0",
+    "bcryptjs": "^3.0.3",
     "next": "^15.1.0",
+    "next-auth": "5.0.0-beta.31",
+    "node-cron": "^4.6.0",
     "nodemailer": "^9.0.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
     "@types/node": "^22.10.0",
+    "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.0.0",
     "prisma": "^6.2.0",
+    "tsx": "^4.23.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   }
