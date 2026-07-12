@@ -2,14 +2,27 @@ import { prisma } from "@/lib/db";
 import { findNotifyCandidates, type NotifyShow } from "./candidates";
 import { sendMail } from "./mailer";
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function renderEmail(shows: NotifyShow[]): string {
   const rows = shows
     .map((s) => {
       const when = s.showTime ? s.showTime.toISOString().slice(0, 16).replace("T", " ") : "待定";
       const maybe = s.hasTitleOnlyMatch ? "(可能相关) " : "";
-      return `<li><b>${maybe}${s.artistNames.join(" / ")}</b> — ${s.title}<br/>
-        场馆:${s.venue ?? "待定"} · 时间:${when} · 票价:${s.price ?? "待定"}<br/>
-        <a href="${s.url}">${s.url}</a></li>`;
+      const artists = s.artistNames.map(escapeHtml).join(" / ");
+      const venue = escapeHtml(s.venue ?? "待定");
+      const price = escapeHtml(s.price ?? "待定");
+      const url = escapeHtml(s.url);
+      return `<li><b>${maybe}${artists}</b> — ${escapeHtml(s.title)}<br/>
+        场馆:${venue} · 时间:${when} · 票价:${price}<br/>
+        <a href="${url}">${url}</a></li>`;
     })
     .join("");
   return `<p>你关注的音乐人有新的演出:</p><ul>${rows}</ul>`;
