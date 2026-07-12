@@ -21,5 +21,11 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  scraper:
+    build: ./scraper
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
 volumes:
   pgdata:
