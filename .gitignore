@@ -7,3 +7,5 @@ scraper/.venv/
 scraper/__pycache__/
 scraper/**/__pycache__/
 .pytest_cache/
+.DS_Store
+*.tsbuildinfo

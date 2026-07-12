@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  emailVerified DateTime? @map("email_verified")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  cities        UserCity[]
+  playlists     Playlist[]
+  artists       UserArtist[]
+  notifications Notification[]
+  @@map("users")
+}
+
+model UserCity {
+  id       String @id @default(cuid())
+  userId   String @map("user_id")
+  cityCode String @map("city_code")
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, cityCode])
+  @@map("user_cities")
+}
+
+model Playlist {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  platform      String
+  externalId    String    @map("external_id")
+  title         String?
+  status        String    @default("pending") // pending | resolving | ready | failed
+  failureReason String?   @map("failure_reason")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userArtists   UserArtist[]
+  @@unique([userId, platform, externalId])
+  @@map("playlists")
+}
+
+model Artist {
+  id             String   @id @default(cuid())
+  name           String
+  normalizedName String   @unique @map("normalized_name")
+  aliases        Json     @default("[]")
+  createdAt      DateTime @default(now()) @map("created_at")
+  userArtists    UserArtist[]
+  showArtists    ShowArtist[]
+  @@map("artists")
+}
+
+model UserArtist {
+  id               String    @id @default(cuid())
+  userId           String    @map("user_id")
+  artistId         String    @map("artist_id")
+  sourcePlaylistId String?   @map("source_playlist_id")
+  status           String    @default("followed") // followed | ignored
+  createdAt        DateTime  @default(now()) @map("created_at")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist           Artist    @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  sourcePlaylist   Playlist? @relation(fields: [sourcePlaylistId], references: [id], onDelete: SetNull)
+  @@unique([userId, artistId])
+  @@map("user_artists")
+}
+
+model Show {
+  id            String    @id @default(cuid())
+  showstartId   String    @unique @map("showstart_id")
+  title         String
+  cityCode      String    @map("city_code")
+  venue         String?
+  showTime      DateTime? @map("show_time")
+  price         String?
+  url           String
+  performers    Json      @default("[]")
+  firstSeenAt   DateTime  @default(now()) @map("first_seen_at")
+  showArtists   ShowArtist[]
+  notifications Notification[]
+  @@index([cityCode])
+  @@map("shows")
+}
+
+model ShowArtist {
+  id        String @id @default(cuid())
+  showId    String @map("show_id")
+  artistId  String @map("artist_id")
+  matchedBy String @map("matched_by") // performer | title
+  show      Show   @relation(fields: [showId], references: [id], onDelete: Cascade)
+  artist    Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  @@unique([showId, artistId])
+  @@map("show_artists")
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  showId    String    @map("show_id")
+  status    String    @default("pending") // pending | sent | failed
+  sentAt    DateTime? @map("sent_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  show      Show      @relation(fields: [showId], references: [id], onDelete: Cascade)
+  @@unique([userId, showId])
+  @@map("notifications")
+}
