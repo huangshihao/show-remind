@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.next
+.git
+.env
+.env.local
+*.log
+*.tsbuildinfo
+.DS_Store
+.superpowers
+scraper/.venv
+scraper/__pycache__
+**/__pycache__
+docs
