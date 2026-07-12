@@ -12,7 +12,7 @@ export async function maybeAlertAdmin(
   await sendMail(
     admin,
     "[show-remind] 秀动爬取连续失败",
-    `<p>已连续 ${consecutiveFailures} 轮全局爬取失败,失败城市:${failedCities.join(", ")}。大概率是签名算法变更,请检查 scraper。</p>`,
+    `<p>已连续 ${consecutiveFailures} 轮全局爬取失败,失败城市:${failedCities.join(", ")}。大概率是签名算法变更,请检查 lib/sources/showstart。</p>`,
   );
   return true;
 }

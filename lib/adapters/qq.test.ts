@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import * as client from "@/lib/scraper-client";
+import { fetchQqPlaylist } from "@/lib/sources/qq";
 import { resolveQqPlaylist } from "./qq";
 
-afterEach(() => vi.restoreAllMocks());
+vi.mock("@/lib/sources/qq", () => ({ fetchQqPlaylist: vi.fn() }));
+
+afterEach(() => vi.clearAllMocks());
 
 describe("resolveQqPlaylist", () => {
-  it("maps scraper playlist to ResolvedPlaylist", async () => {
-    vi.spyOn(client.scraperClient, "qqPlaylist").mockResolvedValue({
+  it("maps qq playlist to ResolvedPlaylist", async () => {
+    vi.mocked(fetchQqPlaylist).mockResolvedValue({
       title: "摇滚",
       songs: [{ name: "s", artists: ["万能青年旅店", "客座"] }],
     });

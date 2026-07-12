@@ -21,30 +21,22 @@ services:
       - "127.0.0.1:1025:1025"
       - "127.0.0.1:8025:8025"
 
-  scraper:
-    build: ./scraper
-    ports:
-      - "127.0.0.1:8001:8001"
-    restart: unless-stopped
-
   web:
     build: { context: ., target: web }
     env_file: .env
     environment:
       DATABASE_URL: "postgresql://showremind:showremind@postgres:5432/showremind?schema=public"
-      SCRAPER_BASE_URL: "http://scraper:8001"
       SMTP_HOST: "mailhog"
     ports: ["3000:3000"]
-    depends_on: [postgres, scraper, mailhog]
+    depends_on: [postgres, mailhog]
 
   worker:
     build: { context: ., target: worker }
     env_file: .env
     environment:
       DATABASE_URL: "postgresql://showremind:showremind@postgres:5432/showremind?schema=public"
-      SCRAPER_BASE_URL: "http://scraper:8001"
       SMTP_HOST: "mailhog"
-    depends_on: [postgres, scraper, mailhog]
+    depends_on: [postgres, mailhog]
 
 volumes:
   pgdata:

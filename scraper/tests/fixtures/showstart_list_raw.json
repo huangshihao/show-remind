@@ -1,9 +1,0 @@
-{
-  "state": 1,
-  "data": {
-    "result": [
-      { "activityId": 100001, "title": "万能青年旅店 2026 巡演 上海站", "cityCode": "310000", "showTime": "2026-08-01 20:00:00" },
-      { "activityId": 100002, "title": "重塑雕像的权利 上海", "cityCode": "310000", "showTime": "2026-08-15 20:30:00" }
-    ]
-  }
-}

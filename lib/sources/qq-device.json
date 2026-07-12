@@ -1,0 +1,20 @@
+{
+  "ct": 11,
+  "cv": 14090008,
+  "v": 14090008,
+  "tmeAppID": "qqmusic",
+  "chid": "10003505",
+  "QIMEI": "800df822cb1c1fb1590e9481100013f1a70a",
+  "QIMEI36": "0b3798b6f7422d1a855f54fc10001651730b",
+  "OpenUDID": "0c971f0c4e38417e9d5a6114be4cfec9",
+  "OpenUDID2": "0c971f0c4e38417e9d5a6114be4cfec9",
+  "udid": "0c971f0c4e38417e9d5a6114be4cfec9",
+  "aid": "f436ee908e2435bd",
+  "uid": "6711550560",
+  "sid": "20260712212011",
+  "os_ver": "10",
+  "phonetype": "MI 6",
+  "devicelevel": "29",
+  "newdevicelevel": "29",
+  "rom": "xiaomi/iarim/sagit:10/eomam.200122.001/4479615:user/release-keys"
+}

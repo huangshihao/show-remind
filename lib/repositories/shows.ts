@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import type { ShowDetail } from "@/lib/scraper-client";
+import type { ShowDetail } from "@/lib/sources/showstart";
 
 export async function filterNewShowstartIds(ids: string[]): Promise<string[]> {
   if (ids.length === 0) return [];

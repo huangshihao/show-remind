@@ -1,4 +1,4 @@
-import { scraperClient } from "@/lib/scraper-client";
+import { fetchCityShows, fetchShowDetail } from "@/lib/sources/showstart";
 import { filterNewShowstartIds, upsertShow } from "@/lib/repositories/shows";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -12,11 +12,11 @@ export async function crawlCities(
 
   for (const cityCode of cityCodes) {
     try {
-      const { shows } = await scraperClient.cityShows(cityCode, 1);
+      const { shows } = await fetchCityShows(cityCode, 1);
       const newIds = await filterNewShowstartIds(shows.map((s) => s.showstartId));
       for (const showstartId of newIds) {
         await sleep(jitter());
-        const detail = await scraperClient.showDetail(showstartId);
+        const detail = await fetchShowDetail(showstartId);
         const saved = await upsertShow(detail);
         newShowIds.push(saved.id);
       }
