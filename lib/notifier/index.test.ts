@@ -31,6 +31,35 @@ describe("runNotifications", () => {
     const notifs = await prisma.notification.count({ where: { userId: user.id, status: "sent" } });
     expect(notifs).toBe(2);
   });
+
+  it("writes zero notification rows on a failed send, leaving the show a retry candidate", async () => {
+    vi.spyOn(mailer, "sendMail").mockRejectedValue(new Error("smtp down"));
+    const user = await prisma.user.create({
+      data: { email: `r_${uid()}@e.com`, passwordHash: "x", emailVerified: new Date(),
+        cities: { create: { cityCode: "310000" } } },
+    });
+    const artist = await upsertArtist(`Band_${uid()}`);
+    await prisma.userArtist.create({ data: { userId: user.id, artistId: artist.id, status: "followed" } });
+    const show = await upsertShow({
+      showstartId: `S_${uid()}`, title: "T", cityCode: "310000", venue: "V",
+      showTime: null, price: null, url: "http://x", performers: [artist.name],
+    });
+    await persistMatches([{ showId: show.id, artistId: artist.id, matchedBy: "performer" }]);
+
+    const result = await runNotifications();
+    expect(result.emailsFailed).toBeGreaterThanOrEqual(1);
+    const notifs = await prisma.notification.count({ where: { userId: user.id, showId: show.id } });
+    expect(notifs).toBe(0);
+
+    // The show is still a candidate: a subsequent run with a working mailer
+    // should pick it up and successfully notify.
+    vi.restoreAllMocks();
+    vi.spyOn(mailer, "sendMail").mockResolvedValue();
+    const retryResult = await runNotifications();
+    expect(retryResult.usersNotified).toBeGreaterThanOrEqual(1);
+    const sentNotifs = await prisma.notification.count({ where: { userId: user.id, showId: show.id, status: "sent" } });
+    expect(sentNotifs).toBe(1);
+  }, 15000);
 });
 
 afterAll(async () => {

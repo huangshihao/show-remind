@@ -47,13 +47,19 @@ export async function runNotifications(): Promise<{ usersNotified: number; email
 
   for (const { userId, email, shows } of candidates) {
     const ok = await sendWithRetry(email, renderEmail(shows));
-    const status = ok ? "sent" : "failed";
-    await prisma.notification.createMany({
-      data: shows.map((s) => ({ userId, showId: s.showId, status, sentAt: ok ? new Date() : null })),
-      skipDuplicates: true,
-    });
-    if (ok) usersNotified++;
-    else emailsFailed++;
+    if (ok) {
+      await prisma.notification.createMany({
+        data: shows.map((s) => ({ userId, showId: s.showId, status: "sent", sentAt: new Date() })),
+        skipDuplicates: true,
+      });
+      usersNotified++;
+    } else {
+      // Do not persist failure rows: candidates.ts excludes shows with ANY
+      // notification row for the user, so writing on failure would
+      // permanently lock the user out of future retries for this show.
+      // Leaving no row lets the next pipeline run retry naturally.
+      emailsFailed++;
+    }
   }
   return { usersNotified, emailsFailed };
 }

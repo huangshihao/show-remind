@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: showremind
       POSTGRES_DB: showremind
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,13 +18,13 @@ services:
   mailhog:
     image: mailhog/mailhog
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 
   scraper:
     build: ./scraper
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     restart: unless-stopped
 
   web:
