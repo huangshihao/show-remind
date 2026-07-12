@@ -20,8 +20,9 @@
 | 城市过滤 | 用户选 1-N 个关注城市,只推这些城市的演出 |
 | 艺人关注方式 | 歌单解析后用户勾选确认(默认全选、按歌数降序);另支持手动输入艺人名添加 |
 | 提醒时机 | 仅"发现新演出立即提醒",不做开票/开演提醒 |
-| 技术栈 | Next.js(App Router + TypeScript)全栈 + Prisma + PostgreSQL;后台任务独立 worker 进程(node-cron) |
+| 技术栈 | Next.js(App Router + TypeScript)全栈 + Prisma + PostgreSQL;后台任务独立 worker 进程(node-cron);QQ/秀动抓取走独立 Python 服务 |
 | 前端 | Next.js 页面(React 服务端组件为主) |
+| 抓取服务切分 | 网易云留在 TS(vendor 自 Node 参考实现);QQ 音乐 + 秀动放独立 Python 无状态抓取服务(直接使用/借用活跃维护的开源实现) |
 | 部署 | 国内 VPS(阿里云/腾讯云等) |
 | 秀动数据策略 | **按城市全量抓取演出列表,本地匹配**(方案 B) |
 
@@ -29,33 +30,39 @@
 
 ```
         ┌────────────────────────────────────────────────────────┐
-        │              单仓库 Next.js 项目 (国内 VPS)               │
+        │            Next.js 应用(业务的唯一"脑子")                 │
         │                                                        │
         │  ┌──────────────────────┐   ┌───────────────────────┐  │
  用户 ◄──►│  web 进程 (next start) │   │  worker 进程 (node-cron)│  │
         │  │  页面 + Server Action │   │  定时: 爬取→匹配→通知     │  │
         │  └──────────┬───────────┘   └───────────┬───────────┘  │
         │             │      共享 lib/(下述模块)     │              │
-        │             │                           │              │
-        │  歌单解析器 PlaylistAdapter                               │
-        │   ├─ netease(weapi 加密,vendor 自 NeteaseCloudMusicApi) │──► music.163.com
-        │   └─ qq(参考 qqmusic-api-python 用 TS 重写)              │──► y.qq.com
-        │  秀动爬虫 showstart(按城市列表增量抓取+详情补齐)             │──► wap.showstart.com
-        │  匹配引擎 matcher(纯本地,无外部请求)                       │
-        │  通知服务 notifier(nodemailer SMTP)                     │──► 邮件服务商
-        └──────────────────────────┬─────────────────────────────┘
-                                   │ Prisma
-                              PostgreSQL
+        │                                                        │
+        │  lib/adapters/netease(weapi vendor 自                  │──► music.163.com
+        │    NeteaseCloudMusicApi,TS 实现)                        │
+        │  lib/adapters/qq、lib/crawler/showstart ──────────────┐ │
+        │  lib/matcher(纯本地) lib/notifier(nodemailer)          │ │──► 邮件服务商
+        └──────────────────────────┬────────────────────────────┼─┘
+                                   │ Prisma                     │ 内部 HTTP + zod 校验
+                              PostgreSQL                        ▼
+        ┌────────────────────────────────────────────────────────┐
+        │      scraper 服务(Python/FastAPI,无状态纯抓取适配器)      │
+        │  GET /qq/playlist/{id}          (qqmusic-api-python)   │──► y.qq.com
+        │  GET /showstart/cities/{code}/shows                    │──► wap.showstart.com
+        │  GET /showstart/shows/{id}      (签名借用开源抢票项目)     │
+        │  不碰数据库、无业务逻辑、无定时任务                          │
+        └────────────────────────────────────────────────────────┘
 ```
 
 ### 3.1 选型理由
 
 - **Next.js(App Router + TypeScript)全栈:** 页面用 React 服务端组件 + Server Actions 处理表单(粘歌单、勾艺人、城市管理),不单独起 API 服务。
-- **后台任务独立 worker 进程:** Next.js 请求周期不适合承载长时爬虫。同仓库第二入口 `worker.ts`,用 node-cron 调度「爬取 → 匹配 → 通知」流水线,与 web 进程共享 `lib/` 代码和 Prisma 客户端。部署为 docker-compose 三容器:web / worker / postgres。不引入消息队列(Redis/BullMQ),当前规模(每天几百个爬虫请求、小邮件量)用不上。
-- **PostgreSQL + Prisma:** 多用户 + 爬虫并发写,直接用 Postgres;Prisma 管 schema 与迁移。
-- **网易云 vendor 自 NeteaseCloudMusicApi:** 匿名场景只需 `playlist/detail` + `song/detail` 两个接口。该项目本身是 Node,weapi 加密(AES+RSA)直接参考其 `crypto.js` 移植约百余行,**不把已归档的包作为运行时依赖**,只 vendor 需要的部分。
-- **QQ 音乐参考 qqmusic-api-python 用 TS 重写:** 公开歌单匿名可取,需移植其请求签名逻辑。
-- **秀动客户端抽象为可替换接口:** 首选 wap/小程序 JSON 接口(签名实现参考开源抢票项目,多为 Python,需移植到 TS);签名失效时降级为 web 站 HTML 解析。这是全项目最脆弱的一环,单独隔离。
+- **后台任务独立 worker 进程:** Next.js 请求周期不适合承载长时爬虫。同仓库第二入口 `worker.ts`,用 node-cron 调度「爬取 → 匹配 → 通知」流水线,与 web 进程共享 `lib/` 代码和 Prisma 客户端。不引入消息队列(Redis/BullMQ),当前规模(每天几百个爬虫请求、小邮件量)用不上。
+- **Python scraper 服务(核心决策):** QQ 音乐和秀动的签名逻辑是全项目最脆、维护成本最高的部分,而两者的可靠开源实现都在 Python 生态——qqmusic-api-python 活跃维护(上游跟进 QQ 签名变更,升级即修复),秀动签名的逆向参考(抢票项目)也以 Python 为主。与其翻译成 TS 后自己承担逆向跟进,不如直接用。该服务是**无状态纯抓取适配器**:不碰数据库、不含业务逻辑、无定时任务,只暴露内部 HTTP 接口(`/qq/playlist/{id}`、`/showstart/cities/{code}/shows`、`/showstart/shows/{id}`),Node 侧调用时用 zod 校验响应结构。坏了/换实现不影响数据模型与业务。
+- **网易云留在 TS:** 匿名场景只需 `playlist/detail` + `song/detail` 两个接口,参考实现(NeteaseCloudMusicApi)本身是 Node,weapi 加密(AES+RSA)直接参考其 `crypto.js` 移植约百余行,**不把已归档的包作为运行时依赖**,只 vendor 需要的部分。
+- **PostgreSQL + Prisma:** 多用户 + 爬虫并发写,直接用 Postgres;Prisma 管 schema 与迁移。只有 Next.js 侧(web/worker)访问数据库。
+- **秀动降级路径:** scraper 服务内部把秀动 client 抽象为可替换接口,签名失效时降级为 web 站 HTML 解析;对 Node 侧接口不变。
+- **部署:** docker-compose 四容器:web / worker / scraper / postgres。scraper 只在内网暴露,不对公网开放。
 - **邮件:** nodemailer;开发期本地 MailHog,上线用国内邮件推送服务(阿里云 DirectMail / 腾讯云 SES)的 SMTP 通道,避免自建 SMTP 进垃圾箱。
 - **登录:** Auth.js(NextAuth v5)credentials provider,邮箱 + 密码 + 注册验证邮件(邮箱即通知渠道,注册时顺带完成验证)。
 
@@ -64,13 +71,16 @@
 | 模块 | 职责 | 依赖 |
 |---|---|---|
 | `app/` | 页面、Server Actions、会话 | 所有 `lib/` 模块 |
-| `lib/adapters/netease`, `lib/adapters/qq` | 输入歌单 ID → 输出 `[(song, [artist_names])]` | 外部音乐平台接口 |
-| `lib/crawler/showstart` | 输入城市集合 → 演出数据入库 | 秀动接口;`shows` 表 |
+| `lib/adapters/netease` | 输入歌单 ID → 输出 `[(song, [artist_names])]`(TS 原生) | 网易云接口 |
+| `lib/adapters/qq` | 同上,内部转调 scraper 服务 | scraper `/qq/*` |
+| `lib/crawler/showstart` | 输入城市集合 → 演出数据入库,抓取转调 scraper 服务 | scraper `/showstart/*`;`shows` 表 |
+| `lib/scraper-client` | scraper 服务的类型化 HTTP 客户端(zod 校验) | scraper 服务 |
 | `lib/matcher` | 纯函数:艺人集合 × 演出集合 → 匹配对 | 无外部依赖 |
 | `lib/notifier` | 待通知记录 → 发邮件 → 回写状态 | nodemailer |
 | `worker.ts` | node-cron 定时触发 crawler → matcher → notifier 流水线 | 上述 `lib/` 模块 |
+| `scraper/`(Python) | FastAPI 无状态抓取服务:QQ 歌单、秀动列表/详情 | qqmusic-api-python、秀动签名实现 |
 
-每个 adapter 和 crawler 对上层只暴露纯数据结构,便于单测和替换。
+每个 adapter 和 crawler 对上层只暴露纯数据结构,便于单测和替换;两个平台的歌单 adapter 对业务层接口完全一致,业务层不感知底层是 TS 原生还是转调 Python。
 
 ## 4. 数据模型
 
@@ -125,6 +135,7 @@
 
 - **歌单解析失败**(私密歌单/链接无效/平台风控):任务状态落库,页面展示明确原因,可重试。网易云批量 `song/detail` 中途失败则整单标失败,不写半截数据。
 - **秀动爬虫失败:** 单城市失败不影响其他城市;**连续 3 轮全局失败 → 发管理员告警邮件**(大概率是签名算法变更,需要人工介入)。
+- **scraper 服务不可达/响应结构校验失败:** 对 worker 而言等同于抓取失败,走同一条重试与告警路径;zod 校验失败单独记日志(意味着 Python 侧改了返回结构或上游库升级破坏了兼容)。
 - **邮件发送失败:** 指数退避重试 3 次,`notifications` 记状态;单用户失败不阻塞其他用户。
 - **演出变更(改期/取消):** 首版不追踪,只按 showstart_id 去重。列入 roadmap。
 
@@ -136,10 +147,10 @@
 
 ## 9. 测试策略
 
-测试框架:Vitest。
+测试框架:Node 侧 Vitest,Python scraper 侧 pytest。
 
 - **Matcher 纯函数单测(最重):** 归一化、别名、feat 多艺人、单字误报防护、全角/半角。
-- **Adapter/Crawler 单测用录制 fixture:** 真实响应 JSON 存入 repo,不打真实接口;解析逻辑回归有保障。
+- **Adapter/Crawler 单测用录制 fixture:** 真实响应 JSON 存入 repo,不打真实接口;解析逻辑回归有保障。scraper 服务的响应示例同时作为 Node 侧 zod schema 的测试 fixture,保证两侧契约一致。
 - **通知去重单测:** (user, show) 唯一约束下重复触发不重发。
 - **本地集成冒烟:** MailHog 收邮件,真实歌单链接手动跑通全链路。
 
