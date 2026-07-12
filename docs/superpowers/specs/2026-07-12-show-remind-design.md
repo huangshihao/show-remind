@@ -20,53 +20,55 @@
 | 城市过滤 | 用户选 1-N 个关注城市,只推这些城市的演出 |
 | 艺人关注方式 | 歌单解析后用户勾选确认(默认全选、按歌数降序);另支持手动输入艺人名添加 |
 | 提醒时机 | 仅"发现新演出立即提醒",不做开票/开演提醒 |
-| 技术栈 | Python 单体(FastAPI + SQLAlchemy + PostgreSQL + APScheduler) |
-| 前端 | Jinja2 服务端渲染 + htmx,无独立前端构建 |
+| 技术栈 | Next.js(App Router + TypeScript)全栈 + Prisma + PostgreSQL;后台任务独立 worker 进程(node-cron) |
+| 前端 | Next.js 页面(React 服务端组件为主) |
 | 部署 | 国内 VPS(阿里云/腾讯云等) |
 | 秀动数据策略 | **按城市全量抓取演出列表,本地匹配**(方案 B) |
 
 ## 3. 架构
 
 ```
-                    ┌─────────────────────────────────────────┐
-                    │        FastAPI 单体应用 (国内 VPS)         │
-                    │                                         │
- 用户浏览器 ◄───────►│  Web 层(注册登录/粘歌单/勾艺人/看演出)      │
-                    │                                         │
-                    │  歌单解析器 PlaylistAdapter              │
-                    │   ├─ NeteaseAdapter(weapi 加密,自实现)   │──► music.163.com
-                    │   └─ QQMusicAdapter(qqmusic-api-python) │──► y.qq.com
-                    │                                         │
-                    │  秀动爬虫 ShowstartCrawler(APScheduler   │──► wap.showstart.com
-                    │   定时,按城市列表增量抓取+详情补齐)         │
-                    │                                         │
-                    │  匹配引擎 Matcher(纯本地,无外部请求)       │
-                    │  通知服务 Notifier(SMTP 邮件)            │──► 邮件服务商
-                    └──────────────┬──────────────────────────┘
-                                   │
+        ┌────────────────────────────────────────────────────────┐
+        │              单仓库 Next.js 项目 (国内 VPS)               │
+        │                                                        │
+        │  ┌──────────────────────┐   ┌───────────────────────┐  │
+ 用户 ◄──►│  web 进程 (next start) │   │  worker 进程 (node-cron)│  │
+        │  │  页面 + Server Action │   │  定时: 爬取→匹配→通知     │  │
+        │  └──────────┬───────────┘   └───────────┬───────────┘  │
+        │             │      共享 lib/(下述模块)     │              │
+        │             │                           │              │
+        │  歌单解析器 PlaylistAdapter                               │
+        │   ├─ netease(weapi 加密,vendor 自 NeteaseCloudMusicApi) │──► music.163.com
+        │   └─ qq(参考 qqmusic-api-python 用 TS 重写)              │──► y.qq.com
+        │  秀动爬虫 showstart(按城市列表增量抓取+详情补齐)             │──► wap.showstart.com
+        │  匹配引擎 matcher(纯本地,无外部请求)                       │
+        │  通知服务 notifier(nodemailer SMTP)                     │──► 邮件服务商
+        └──────────────────────────┬─────────────────────────────┘
+                                   │ Prisma
                               PostgreSQL
 ```
 
 ### 3.1 选型理由
 
-- **PostgreSQL 而非 SQLite:** 多用户 + 后台爬虫并发写,直接用 Postgres,不做过渡。
-- **APScheduler 进程内调度,不用 Celery/Redis:** 当前规模(每天几百个爬虫请求、小邮件量)足够,减少两个部署组件。
-- **网易云自实现 weapi,不部署 Node 服务:** 匿名场景只需 `playlist/detail` + `song/detail` 两个接口;weapi 加密(AES+RSA)在 Python 有成熟参考(pyncm),约百余行。避免依赖已归档的 NeteaseCloudMusicApi 及其 fork 作为运行时组件。
-- **QQ 音乐用 qqmusic-api-python:** 公开歌单匿名可取。
-- **秀动客户端抽象为可替换接口:** 首选 wap/小程序 JSON 接口(签名实现参考开源抢票项目);签名失效时降级为 web 站 HTML 解析。这是全项目最脆弱的一环,单独隔离。
-- **邮件:** 开发期普通 SMTP(本地 MailHog);上线用国内邮件推送服务(阿里云 DirectMail / 腾讯云 SES),避免自建 SMTP 进垃圾箱。
-- **登录:** 邮箱 + 密码 + 注册验证邮件(邮箱即通知渠道,注册时顺带完成验证)。
+- **Next.js(App Router + TypeScript)全栈:** 页面用 React 服务端组件 + Server Actions 处理表单(粘歌单、勾艺人、城市管理),不单独起 API 服务。
+- **后台任务独立 worker 进程:** Next.js 请求周期不适合承载长时爬虫。同仓库第二入口 `worker.ts`,用 node-cron 调度「爬取 → 匹配 → 通知」流水线,与 web 进程共享 `lib/` 代码和 Prisma 客户端。部署为 docker-compose 三容器:web / worker / postgres。不引入消息队列(Redis/BullMQ),当前规模(每天几百个爬虫请求、小邮件量)用不上。
+- **PostgreSQL + Prisma:** 多用户 + 爬虫并发写,直接用 Postgres;Prisma 管 schema 与迁移。
+- **网易云 vendor 自 NeteaseCloudMusicApi:** 匿名场景只需 `playlist/detail` + `song/detail` 两个接口。该项目本身是 Node,weapi 加密(AES+RSA)直接参考其 `crypto.js` 移植约百余行,**不把已归档的包作为运行时依赖**,只 vendor 需要的部分。
+- **QQ 音乐参考 qqmusic-api-python 用 TS 重写:** 公开歌单匿名可取,需移植其请求签名逻辑。
+- **秀动客户端抽象为可替换接口:** 首选 wap/小程序 JSON 接口(签名实现参考开源抢票项目,多为 Python,需移植到 TS);签名失效时降级为 web 站 HTML 解析。这是全项目最脆弱的一环,单独隔离。
+- **邮件:** nodemailer;开发期本地 MailHog,上线用国内邮件推送服务(阿里云 DirectMail / 腾讯云 SES)的 SMTP 通道,避免自建 SMTP 进垃圾箱。
+- **登录:** Auth.js(NextAuth v5)credentials provider,邮箱 + 密码 + 注册验证邮件(邮箱即通知渠道,注册时顺带完成验证)。
 
 ### 3.2 模块边界
 
 | 模块 | 职责 | 依赖 |
 |---|---|---|
-| `web` | 路由、页面渲染、会话 | 所有下层模块 |
-| `adapters/netease`, `adapters/qq` | 输入歌单 ID → 输出 `[(song, [artist_names])]` | 外部音乐平台接口 |
-| `crawler/showstart` | 输入城市集合 → 演出数据入库 | 秀动接口;`shows` 表 |
-| `matcher` | 纯函数:艺人集合 × 演出集合 → 匹配对 | 无外部依赖 |
-| `notifier` | 待通知记录 → 发邮件 → 回写状态 | SMTP |
-| `scheduler` | 定时触发 crawler → matcher → notifier 流水线 | APScheduler |
+| `app/` | 页面、Server Actions、会话 | 所有 `lib/` 模块 |
+| `lib/adapters/netease`, `lib/adapters/qq` | 输入歌单 ID → 输出 `[(song, [artist_names])]` | 外部音乐平台接口 |
+| `lib/crawler/showstart` | 输入城市集合 → 演出数据入库 | 秀动接口;`shows` 表 |
+| `lib/matcher` | 纯函数:艺人集合 × 演出集合 → 匹配对 | 无外部依赖 |
+| `lib/notifier` | 待通知记录 → 发邮件 → 回写状态 | nodemailer |
+| `worker.ts` | node-cron 定时触发 crawler → matcher → notifier 流水线 | 上述 `lib/` 模块 |
 
 每个 adapter 和 crawler 对上层只暴露纯数据结构,便于单测和替换。
 
@@ -133,6 +135,8 @@
 3. **网易云匿名接口偶发风控:** song/detail 分批限速 + 失败重试。
 
 ## 9. 测试策略
+
+测试框架:Vitest。
 
 - **Matcher 纯函数单测(最重):** 归一化、别名、feat 多艺人、单字误报防护、全角/半角。
 - **Adapter/Crawler 单测用录制 fixture:** 真实响应 JSON 存入 repo,不打真实接口;解析逻辑回归有保障。
