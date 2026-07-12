@@ -110,3 +110,10 @@ model Notification {
   @@unique([userId, showId])
   @@map("notifications")
 }
+
+model VerificationToken {
+  token   String   @id
+  userId  String   @map("user_id")
+  expires DateTime
+  @@map("verification_tokens")
+}
