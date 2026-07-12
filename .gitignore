@@ -1,0 +1,11 @@
+node_modules/
+.next/
+.env
+.env.local
+*.log
+scraper/.venv/
+scraper/__pycache__/
+scraper/**/__pycache__/
+.pytest_cache/
+.DS_Store
+*.tsbuildinfo

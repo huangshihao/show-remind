@@ -1,0 +1,7 @@
+{
+  "songs": [
+    { "id": 111, "name": "杀死那个石家庄人", "ar": [{ "name": "万能青年旅店" }] },
+    { "id": 222, "name": "河北墨麒麟", "ar": [{ "name": "万能青年旅店" }, { "name": "客座" }] },
+    { "id": 333, "name": "Pyramid Song", "ar": [{ "name": "Radiohead" }] }
+  ]
+}
