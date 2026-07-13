@@ -1,5 +1,12 @@
-import { describe, it, expect } from "vitest";
-import { normalizeShowTime, transformShowList, transformShowDetail } from "./showstart";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import {
+  normalizeShowTime,
+  transformShowList,
+  transformShowDetail,
+  transformArtistSearch,
+  searchArtist,
+  ShowstartClient,
+} from "./showstart";
 
 describe("normalizeShowTime", () => {
   it("parses Chinese show-time strings to ISO", () => {
@@ -99,5 +106,77 @@ describe("transformShowDetail", () => {
   it("returns poster: null when result has no avatar", () => {
     const d = transformShowDetail({ result: { activityId: 1 } });
     expect(d.poster).toBeNull();
+  });
+});
+
+const SEARCH_RAW = {
+  state: "1",
+  success: true,
+  result: [
+    {
+      id: 2503,
+      name: "刺猬Hedgehog",
+      avatar: "https://s2.showstart.com/img/2503.jpg",
+      fansNum: 337604,
+      userType: 2,
+      type: 2,
+    },
+    { id: 9001, name: "某某场地", avatar: "https://s2.showstart.com/img/9001.jpg", fansNum: 50, type: 4 },
+    { id: 9002, name: "普通用户", avatar: null, fansNum: 1, userType: 1 },
+  ],
+};
+
+describe("transformArtistSearch", () => {
+  it("keeps only entries with type or userType === 2", () => {
+    const hits = transformArtistSearch(SEARCH_RAW);
+    expect(hits).toEqual([
+      { id: 2503, name: "刺猬Hedgehog", avatar: "https://s2.showstart.com/img/2503.jpg", fansNum: 337604 },
+    ]);
+  });
+  it("returns empty array for a missing/non-array result", () => {
+    expect(transformArtistSearch({})).toEqual([]);
+    expect(transformArtistSearch({ result: null })).toEqual([]);
+  });
+  it("defaults avatar to null and fansNum to 0 when absent", () => {
+    const raw = { result: [{ id: 1, name: "x", type: 2 }] };
+    expect(transformArtistSearch(raw)).toEqual([{ id: 1, name: "x", avatar: null, fansNum: 0 }]);
+  });
+});
+
+describe("searchArtist", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("prefers an exact normalized-name match over a higher-fans hit", async () => {
+    vi.spyOn(ShowstartClient.prototype, "searchUserRaw").mockResolvedValue({
+      result: [
+        { id: 1, name: "海龟先生乐队", avatar: "a.jpg", fansNum: 999999, type: 2 },
+        { id: 2, name: "刺猬", avatar: "b.jpg", fansNum: 100, type: 2 },
+      ],
+    });
+    const hit = await searchArtist("刺猬");
+    expect(hit).toEqual({ id: 2, name: "刺猬", avatar: "b.jpg", fansNum: 100 });
+  });
+
+  it("falls back to the highest fansNum when no exact match exists", async () => {
+    vi.spyOn(ShowstartClient.prototype, "searchUserRaw").mockResolvedValue({
+      result: [
+        { id: 1, name: "刺猬乐队A", avatar: "a.jpg", fansNum: 100, type: 2 },
+        { id: 2, name: "刺猬乐队B", avatar: "b.jpg", fansNum: 200, type: 2 },
+      ],
+    });
+    const hit = await searchArtist("刺猬");
+    expect(hit?.id).toBe(2);
+  });
+
+  it("returns null when the search yields no artist hits", async () => {
+    vi.spyOn(ShowstartClient.prototype, "searchUserRaw").mockResolvedValue({ result: [] });
+    expect(await searchArtist("不存在的艺人")).toBeNull();
+  });
+
+  it("returns null (never throws) when the underlying request fails", async () => {
+    vi.spyOn(ShowstartClient.prototype, "searchUserRaw").mockRejectedValue(new Error("network down"));
+    expect(await searchArtist("刺猬")).toBeNull();
   });
 });

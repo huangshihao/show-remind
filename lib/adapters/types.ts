@@ -15,4 +15,5 @@ export interface ResolvedPlaylist {
 export interface ArtistTally {
   name: string;
   songCount: number;
+  avatar?: string | null;
 }

@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { normalizeName } from "@/lib/matcher/normalize";
 
 // Showstart wap v3 API, reverse-engineered.
 // See docs/showstart-reverse-engineering.md for the full contract.
@@ -171,6 +172,14 @@ export class ShowstartClient {
     });
     return this.request("POST", "/wap/activity/details", body);
   }
+
+  async searchUserRaw(keyword: string): Promise<any> {
+    return this.request(
+      "POST",
+      "/app/user/search",
+      JSON.stringify({ keyword, pageNo: 1, pageSize: 5 }),
+    );
+  }
 }
 
 export function transformShowList(raw: any, cityCode: string): { shows: ShowSummary[] } {
@@ -250,4 +259,42 @@ export async function fetchCityShows(
 
 export async function fetchShowDetail(showId: string): Promise<ShowDetail> {
   return transformShowDetail(await client().fetchShowDetailRaw(showId));
+}
+
+export interface ArtistHit {
+  id: number;
+  name: string;
+  avatar: string | null;
+  fansNum: number;
+}
+
+export function transformArtistSearch(raw: any): ArtistHit[] {
+  const rows: any[] = Array.isArray(raw?.result) ? raw.result : [];
+  const hits: ArtistHit[] = [];
+  for (const row of rows) {
+    if (row?.type !== 2 && row?.userType !== 2) continue;
+    hits.push({
+      id: row?.id,
+      name: row?.name ?? "",
+      avatar: row?.avatar ?? null,
+      fansNum: row?.fansNum ?? 0,
+    });
+  }
+  return hits;
+}
+
+// Searches Showstart's artist database and picks the best match for `name`:
+// an exact normalized-name match wins; otherwise the hit with the most fans.
+// Never throws — a lookup failure just means no avatar, not a broken resolve.
+export async function searchArtist(name: string): Promise<ArtistHit | null> {
+  try {
+    const hits = transformArtistSearch(await client().searchUserRaw(name));
+    if (hits.length === 0) return null;
+    const target = normalizeName(name);
+    const exact = hits.find((hit) => normalizeName(hit.name) === target);
+    if (exact) return exact;
+    return hits.reduce((best, hit) => (hit.fansNum > best.fansNum ? hit : best));
+  } catch {
+    return null;
+  }
 }
