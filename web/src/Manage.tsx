@@ -12,10 +12,21 @@ export function Manage({ token }: { token: string }) {
   const [error, setError] = useState("");
 
   async function reload() {
-    const res = await fetch(`/api/manage?token=${token}`);
-    if (!res.ok) {
+    let res: Response;
+    try {
+      res = await fetch(`/api/manage?token=${token}`);
+    } catch {
+      // network blip — keep the remembered token, just show a retry hint
+      return setError("加载失败，请检查网络后重试");
+    }
+    // Only a 404 means the token is genuinely invalid/unsubscribed — forget it.
+    // Transient 5xx (D1 hiccup etc.) must NOT evict a valid remembered token.
+    if (res.status === 404) {
       clearToken();
       return setError("链接无效或已退订");
+    }
+    if (!res.ok) {
+      return setError("加载失败，请稍后重试");
     }
     setView(await res.json());
     storeToken(token);

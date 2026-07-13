@@ -32,6 +32,14 @@ it("reminderEmail renders a poster thumbnail when the show has a poster", () => 
   expect(html).toContain("https://s2.showstart.com/x.jpg?imageMogr2/thumbnail/!360x0/quality/85");
 });
 
+it("reminderEmail leaves an already-parameterized poster URL untouched", () => {
+  // Showstart list-row avatars already carry an imageMogr2 query string.
+  const withQuery = { ...show, poster: "https://s2.showstart.com/x.jpg?imageMogr2/thumbnail/!350x500r" };
+  const { html } = reminderEmail([withQuery], "https://s.com", "t");
+  expect(html).toContain("x.jpg?imageMogr2/thumbnail/!350x500r");
+  expect(html).not.toContain("!360x0"); // our default thumbnail param was NOT double-appended
+});
+
 it("reminderEmail renders no img tag when the show has no poster", () => {
   const { html } = reminderEmail([{ ...show, poster: null }], "https://s.com", "tok123");
   expect(html).not.toContain("<img");
