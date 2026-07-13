@@ -10,6 +10,19 @@ import schemaSql from "../../src/db/schema.sql?raw";
 
 // Split schema.sql into statements and execute against the isolated test D1.
 export async function applySchema(): Promise<void> {
+  // Drop tables in reverse dependency order to clear state between tests
+  const tableOrder = [
+    "show_artists",
+    "subscription_artists",
+    "notifications",
+    "shows",
+    "artists",
+    "subscriptions",
+  ];
+  for (const table of tableOrder) {
+    await env.DB.prepare(`DROP TABLE IF EXISTS ${table}`).run();
+  }
+
   const statements = schemaSql
     .split(";")
     .map((s) => s.trim())
