@@ -29,7 +29,7 @@ it("reminderEmail has only an unsubscribe link in the footer (no manage link)", 
 it("reminderEmail renders a poster thumbnail when the show has a poster", () => {
   const { html } = reminderEmail([show], "https://s.com", "tok123");
   expect(html).toContain("<img");
-  expect(html).toContain("https://s2.showstart.com/x.jpg?imageMogr2/thumbnail/!360x0/quality/85");
+  expect(html).toContain("https://s2.showstart.com/x.jpg?imageMogr2/thumbnail/360x/quality/85");
 });
 
 it("reminderEmail leaves an already-parameterized poster URL untouched", () => {
@@ -37,7 +37,7 @@ it("reminderEmail leaves an already-parameterized poster URL untouched", () => {
   const withQuery = { ...show, poster: "https://s2.showstart.com/x.jpg?imageMogr2/thumbnail/!350x500r" };
   const { html } = reminderEmail([withQuery], "https://s.com", "t");
   expect(html).toContain("x.jpg?imageMogr2/thumbnail/!350x500r");
-  expect(html).not.toContain("!360x0"); // our default thumbnail param was NOT double-appended
+  expect(html).not.toContain("thumbnail/360x/quality"); // our default thumbnail param was NOT double-appended
 });
 
 it("reminderEmail renders no img tag when the show has no poster", () => {

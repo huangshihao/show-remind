@@ -10,7 +10,9 @@ function escapeHtml(s: string): string {
 }
 
 function posterThumb(url: string): string {
-  return url.includes("?") ? url : `${url}?imageMogr2/thumbnail/!360x0/quality/85`;
+  // Qiniu imageMogr2: limit width to 360px, keep aspect ratio (verified against
+  // s2.showstart.com — `360x` works, `!360x0` returns 400). ~40-50KB per poster.
+  return url.includes("?") ? url : `${url}?imageMogr2/thumbnail/360x/quality/85`;
 }
 
 export function unsubscribeUrl(baseUrl: string, token: string): string {
