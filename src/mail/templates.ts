@@ -40,7 +40,7 @@ export function reminderEmail(
       const price = escapeHtml(s.price ?? "待定");
       const url = escapeHtml(s.url);
       return `<li><b>${maybe}${artists}</b> — ${escapeHtml(s.title)}<br/>
-        场馆:${venue} · 时间:${when} · 票价:${price}<br/>
+        场馆:${venue} · 时间:${escapeHtml(when)} · 票价:${price}<br/>
         <a href="${url}">${url}</a></li>`;
     })
     .join("");

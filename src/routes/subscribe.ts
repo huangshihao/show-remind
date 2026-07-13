@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
-import { createPendingSubscription } from "../db/subscriptions";
+import { createPendingSubscription, getByEmail } from "../db/subscriptions";
 import { setArtists } from "../db/subscription-artists";
 import { getMailProvider } from "../mail/provider";
 import { confirmEmail } from "../mail/templates";
@@ -28,14 +28,28 @@ subscribeRouter.post("/", async (c) => {
   }
 
   if (c.env.PUBLIC_MODE === "1") {
-    const ok = body.turnstileToken && (await verifyTurnstile(body.turnstileToken, c.env.TURNSTILE_SECRET));
+    let ok = false;
+    try {
+      ok = !!body.turnstileToken && (await verifyTurnstile(body.turnstileToken, c.env.TURNSTILE_SECRET));
+    } catch {
+      ok = false;
+    }
     if (!ok) return c.json({ error: "人机校验失败，请重试" }, 400);
+  }
+
+  const mail = getMailProvider(c.env);
+
+  const existing = await getByEmail(c.env.DB, email);
+  if (existing && existing.status === "active") {
+    // Do not let an unauthenticated re-subscribe modify a live subscription.
+    // Re-send the (existing) magic link to the registered owner; reveal nothing.
+    const { subject, html } = confirmEmail(c.env.APP_BASE_URL, existing.token);
+    await mail.send({ to: existing.email, subject, html });
+    return c.json({ ok: true });
   }
 
   const sub = await createPendingSubscription(c.env.DB, email, cities);
   await setArtists(c.env.DB, sub.id, artists.slice(0, MAX_ARTISTS));
-
-  const mail = getMailProvider(c.env);
   const { subject, html } = confirmEmail(c.env.APP_BASE_URL, sub.token);
   await mail.send({ to: email, subject, html });
 

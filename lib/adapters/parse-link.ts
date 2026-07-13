@@ -50,7 +50,13 @@ export async function parsePlaylistLink(input: string): Promise<ParsedLink> {
   if (!url) throw new InvalidPlaylistLinkError(input);
 
   let target = url;
-  if (/163cn\.tv/.test(url)) {
+  let host = "";
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    /* leave host empty; falls through to tryParse which will reject */
+  }
+  if (host === "163cn.tv" || host.endsWith(".163cn.tv")) {
     target = await resolveShortLink(url);
   }
   const parsed = tryParse(target);

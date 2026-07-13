@@ -42,3 +42,18 @@ it("confirm with unknown token returns 404", async () => {
   const res = await app.request("/api/confirm?token=nope", {}, env);
   expect(res.status).toBe(404);
 });
+
+it("re-subscribing an ACTIVE email does not clobber its artists/status", async () => {
+  await subscribe({ email: "a@b.com", cities: ["110000"], artists: ["刺猬"] });
+  const first = await getByEmail(env.DB, "a@b.com");
+  await app.request(`/api/confirm?token=${first!.token}`, {}, env);
+
+  const res = await subscribe({ email: "a@b.com", cities: ["310000"], artists: ["达达"] });
+  expect(res.status).toBe(200);
+
+  const sub = await getByEmail(env.DB, "a@b.com");
+  expect(sub?.status).toBe("active");
+  expect(sub?.token).toBe(first!.token);
+  const artists = await listArtists(env.DB, sub!.id);
+  expect(artists.map((a) => a.name)).toEqual(["刺猬"]);
+});

@@ -27,3 +27,12 @@ it("reminderEmail marks title-only matches as maybe-related", () => {
   const { html } = reminderEmail([{ ...show, hasTitleOnlyMatch: true }], "https://s.com", "t");
   expect(html).toContain("可能相关");
 });
+
+it("reminderEmail escapes HTML in the showTime-derived 'when' field", () => {
+  // showTime is sliced to the first 16 chars before rendering, so the
+  // injected markup must appear within that window to exercise escaping.
+  const malicious: NotifyShow = { ...show, showTime: "<script>alert(1)</script>" };
+  const { html } = reminderEmail([malicious], "https://s.com", "tok123");
+  expect(html).not.toContain("<script>");
+  expect(html).toContain("&lt;script&gt;");
+});

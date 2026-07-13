@@ -45,7 +45,7 @@ export async function createPendingSubscription(
   const citiesJson = JSON.stringify(cities);
   if (existing) {
     await db
-      .prepare("UPDATE subscriptions SET status='pending', cities=? WHERE id=?")
+      .prepare("UPDATE subscriptions SET status='pending', cities=?, created_at=datetime('now') WHERE id=?")
       .bind(citiesJson, existing.id)
       .run();
     return { ...existing, status: "pending", cities };

@@ -23,4 +23,13 @@ describe("parsePlaylistLink", () => {
       InvalidPlaylistLinkError,
     );
   });
+  it("does not treat a 163cn.tv substring in an unrelated host as a short link (SSRF guard)", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    await expect(
+      parsePlaylistLink("https://evil.example/?x=163cn.tv"),
+    ).rejects.toBeInstanceOf(InvalidPlaylistLinkError);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
 });

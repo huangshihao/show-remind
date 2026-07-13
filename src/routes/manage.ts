@@ -67,7 +67,12 @@ manageRouter.post("/import", async (c) => {
   const { link, turnstileToken } = await c.req.json<{ link?: string; turnstileToken?: string }>();
   if (!link) return c.json({ error: "缺少歌单链接" }, 400);
   if (c.env.PUBLIC_MODE === "1") {
-    const ok = turnstileToken && (await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET));
+    let ok = false;
+    try {
+      ok = !!turnstileToken && (await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET));
+    } catch {
+      ok = false;
+    }
     if (!ok) return c.json({ error: "人机校验失败" }, 400);
   }
   let resolved;

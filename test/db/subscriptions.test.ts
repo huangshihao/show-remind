@@ -9,6 +9,7 @@ import {
   setCities,
   deleteByToken,
 } from "../../src/db/subscriptions";
+import { deleteStalePending } from "../../src/db/notifications";
 
 beforeEach(applySchema);
 const db = () => env.DB;
@@ -49,4 +50,20 @@ it("deleteByToken removes the row", async () => {
   const sub = await createPendingSubscription(db(), "a@b.com", ["110000"]);
   expect(await deleteByToken(db(), sub.token)).toBe(true);
   expect(await getByToken(db(), sub.token)).toBeNull();
+});
+
+it("re-subscribe resets created_at so a stale pending row isn't reaped after re-sub", async () => {
+  const sub = await createPendingSubscription(db(), "a@b.com", ["110000"]);
+  // Backdate created_at to 3 days ago, simulating a long-stale pending row.
+  await db()
+    .prepare("UPDATE subscriptions SET created_at=datetime('now', '-3 days') WHERE id=?")
+    .bind(sub.id)
+    .run();
+
+  await createPendingSubscription(db(), "a@b.com", ["310000"]);
+
+  // deleteStalePending(48h) must NOT delete it since created_at was refreshed.
+  const deleted = await deleteStalePending(db(), 48);
+  expect(deleted).toBe(0);
+  expect(await getByToken(db(), sub.token)).not.toBeNull();
 });
