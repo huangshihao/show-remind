@@ -24,7 +24,7 @@
     // Your deployed Worker URL (used in confirm/manage/unsubscribe links in emails).
     // Set this to the real https://<name>.<subdomain>.workers.dev or custom domain
     // after your first deploy.
-    "APP_BASE_URL": "http://localhost:8787",
+    "APP_BASE_URL": "https://show-remind.horacewomw.workers.dev",
     // Verified sender address for outgoing mail (must be verified with your mail
     // provider, e.g. a Resend domain/sender).
     "MAIL_FROM": "Show Remind <notify@example.com>",
