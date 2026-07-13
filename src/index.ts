@@ -5,6 +5,8 @@ import { subscribeRouter } from "./routes/subscribe";
 import { confirmRouter } from "./routes/confirm";
 import { manageRouter } from "./routes/manage";
 import { configRouter } from "./routes/config";
+import { internalRouter } from "./routes/internal";
+import { runScheduled } from "./pipeline/run";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -20,5 +22,14 @@ app.route("/api/subscribe", subscribeRouter);
 app.route("/api/confirm", confirmRouter);
 app.route("/api/manage", manageRouter);
 app.route("/api/config", configRouter);
+app.route("/internal", internalRouter);
 
-export default app;
+export { app }; // for app.request in tests
+export default {
+  fetch: app.fetch,
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    // jitter 0-10 min so runs are not exactly on the minute
+    const delay = Math.floor(Math.random() * 10 * 60 * 1000);
+    ctx.waitUntil(new Promise<void>((r) => setTimeout(r, delay)).then(() => runScheduled(env)));
+  },
+};

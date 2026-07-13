@@ -1,0 +1,29 @@
+import { beforeEach, expect, it, vi } from "vitest";
+import { env } from "cloudflare:test";
+import { applySchema } from "../db/apply-schema";
+import { createPendingSubscription, activateByToken } from "../../src/db/subscriptions";
+import { addArtistToSubscription } from "../../src/db/subscription-artists";
+import { upsertShow } from "../../src/db/shows";
+import { persistMatches } from "../../src/db/show-artists";
+import { runNotifications } from "../../src/pipeline/notify";
+
+beforeEach(applySchema);
+
+it("sends one reminder per candidate and marks shows sent", async () => {
+  const sub = await createPendingSubscription(env.DB, "a@b.com", ["110000"]);
+  await activateByToken(env.DB, sub.token);
+  const artistId = await addArtistToSubscription(env.DB, sub.id, "刺猬");
+  const show = await upsertShow(env.DB, {
+    showstartId: "1", title: "刺猬专场", cityCode: "110000", venue: "MAO",
+    showTime: "2026-08-01T20:00:00", price: "180", url: "https://x/1", performers: ["刺猬"],
+  });
+  await persistMatches(env.DB, [{ showId: show.id, artistId, matchedBy: "performer" }]);
+
+  const sendMock = vi.fn(async () => new Response(JSON.stringify({ id: "1" }), { status: 200 }));
+  vi.stubGlobal("fetch", sendMock); // no RESEND_API_KEY in test env -> console provider, fetch unused
+  const res = await runNotifications(env.DB, env);
+  expect(res.sent).toBe(1);
+  // second run: already notified, nothing to send
+  expect((await runNotifications(env.DB, env)).sent).toBe(0);
+  vi.unstubAllGlobals();
+});

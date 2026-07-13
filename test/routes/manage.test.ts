@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
 import { applySchema } from "../db/apply-schema";
-import app from "../../src/index";
+import { app } from "../../src/index";
 import { createPendingSubscription, activateByToken } from "../../src/db/subscriptions";
 import { setArtists, listArtists } from "../../src/db/subscription-artists";
 

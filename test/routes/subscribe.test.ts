@@ -1,7 +1,7 @@
 import { beforeEach, expect, it } from "vitest";
 import { env } from "cloudflare:test";
 import { applySchema } from "../db/apply-schema";
-import app from "../../src/index";
+import { app } from "../../src/index";
 import { getByEmail } from "../../src/db/subscriptions";
 import { listArtists } from "../../src/db/subscription-artists";
 

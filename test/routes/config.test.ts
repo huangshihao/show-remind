@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { env } from "cloudflare:test";
-import app from "../../src/index";
+import { app } from "../../src/index";
 
 it("returns cities and public flags", async () => {
   const res = await app.request("/api/config", {}, env);
