@@ -28,3 +28,12 @@ it("crawls a city when the secret matches", async () => {
   expect((await res.json() as any).newShows).toBe(1);
   vi.restoreAllMocks();
 });
+
+it("fails closed when INTERNAL_SECRET is unset (empty)", async () => {
+  const res = await app.request(
+    "/internal/crawl?city=110000",
+    { headers: { "x-internal-secret": "anything" } },
+    { ...env, INTERNAL_SECRET: "" },
+  );
+  expect(res.status).toBe(403);
+});

@@ -6,7 +6,8 @@ import { matchNewShows } from "../pipeline/match";
 export const internalRouter = new Hono<{ Bindings: Env }>();
 
 internalRouter.get("/crawl", async (c) => {
-  if (c.req.header("x-internal-secret") !== c.env.INTERNAL_SECRET) {
+  const secret = c.env.INTERNAL_SECRET;
+  if (!secret || c.req.header("x-internal-secret") !== secret) {
     return c.text("forbidden", 403);
   }
   const city = c.req.query("city");
