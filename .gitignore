@@ -12,3 +12,6 @@ scraper/**/__pycache__/
 .wrangler/
 .dev.vars
 dist/
+
+# pnpm local build-approval file (regenerated on install)
+pnpm-workspace.yaml
