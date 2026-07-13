@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  ASSETS: Fetcher;
   // vars / secrets (populated in later plans; declared now so the type is stable)
   APP_BASE_URL: string;
   INTERNAL_SECRET: string;

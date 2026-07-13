@@ -11,3 +11,4 @@ scraper/**/__pycache__/
 *.tsbuildinfo
 .wrangler/
 .dev.vars
+dist/
