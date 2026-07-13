@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "show-remind",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "show-remind",
+      "database_id": "5b59cbad-e513-4735-a0d0-e5b3e898076e",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": { "crons": ["0 2,12 * * *"] }
+}
