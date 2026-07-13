@@ -28,6 +28,15 @@ export function confirmEmail(baseUrl: string, token: string): { subject: string;
   };
 }
 
+export function loginEmail(baseUrl: string, token: string): { subject: string; html: string } {
+  const url = `${baseUrl}/manage?token=${token}`;
+  return {
+    subject: "登录 Show-Remind · 管理你的关注",
+    html: `<p>点击链接登录并管理你关注的音乐人：</p><p><a href="${url}">${url}</a></p>
+      <p>如果不是你本人操作，忽略这封邮件即可。</p>`,
+  };
+}
+
 export function reminderEmail(
   shows: NotifyShow[],
   baseUrl: string,

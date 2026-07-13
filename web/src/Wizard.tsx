@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useState } from "react";
 import { initialWizard, wizardReducer, selectedArtistNames } from "./wizard-state";
-import { getConfig, resolveLink, subscribe, type Config } from "./api";
+import { getConfig, resolveLink, subscribe, requestLogin, type Config } from "./api";
 import { Turnstile } from "./Turnstile";
 import { getStoredToken } from "./session";
 
@@ -60,8 +60,10 @@ export function Wizard() {
     <main className="card">
       <h1>Show-Remind</h1>
       <p className="sub">粘贴歌单，选关注的音乐人，留个邮箱，有新演出就发邮件。</p>
-      {getStoredToken() && (
-        <p className="sub"><a href="/manage">← 我已经订阅过 · 管理我的关注</a></p>
+      {getStoredToken() ? (
+        <p className="sub"><a href="/manage">← 进入我的管理页</a></p>
+      ) : (
+        <LoginEntry config={config} />
       )}
       {error && <p className="err">{error}</p>}
 
@@ -145,6 +147,56 @@ export function Wizard() {
         </>
       )}
     </main>
+  );
+}
+
+function LoginEntry({ config }: { config: Config | null }) {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [sent, setSent] = useState(false);
+
+  if (sent) {
+    return <p className="sub">如果这个邮箱订阅过，登录链接已发到你的邮箱，请查收。</p>;
+  }
+
+  if (!open) {
+    return (
+      <p className="sub">
+        已经订阅过？<button className="link" onClick={() => setOpen(true)}>用邮箱登录</button>
+      </p>
+    );
+  }
+
+  async function onSubmit() {
+    setBusy(true);
+    setError("");
+    try {
+      await requestLogin(email, token || undefined);
+      setSent(true);
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="login-entry">
+      <div className="manual">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+        />
+        <button disabled={busy || !email} onClick={onSubmit}>发送登录链接</button>
+      </div>
+      {config?.publicMode && <Turnstile siteKey={config.turnstileSiteKey} onToken={setToken} />}
+      {error && <p className="err">{error}</p>}
+    </div>
   );
 }
 

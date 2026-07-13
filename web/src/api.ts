@@ -29,3 +29,10 @@ export const subscribe = (payload: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   }).then((r) => json<{ ok: boolean }>(r));
+
+export const requestLogin = (email: string, turnstileToken?: string) =>
+  fetch("/api/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, turnstileToken }),
+  }).then((r) => json<{ ok: boolean }>(r));

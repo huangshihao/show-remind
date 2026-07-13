@@ -4,6 +4,7 @@ import { resolveRouter } from "./routes/resolve";
 import { subscribeRouter } from "./routes/subscribe";
 import { confirmRouter } from "./routes/confirm";
 import { manageRouter } from "./routes/manage";
+import { loginRouter } from "./routes/login";
 import { configRouter } from "./routes/config";
 import { internalRouter } from "./routes/internal";
 import { runScheduled } from "./pipeline/run";
@@ -21,6 +22,7 @@ app.route("/api/resolve", resolveRouter);
 app.route("/api/subscribe", subscribeRouter);
 app.route("/api/confirm", confirmRouter);
 app.route("/api/manage", manageRouter);
+app.route("/api/login", loginRouter);
 app.route("/api/config", configRouter);
 app.route("/internal", internalRouter);
 

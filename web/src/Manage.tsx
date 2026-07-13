@@ -54,11 +54,6 @@ export function Manage({ token }: { token: string }) {
     setError("已退订。想重新订阅请回首页。");
   }
 
-  function forgetDevice() {
-    clearToken();
-    window.location.href = "/";
-  }
-
   if (error) return <main className="card"><p>{error}</p></main>;
   if (!view) return <main className="card"><p>加载中…</p></main>;
 
@@ -77,7 +72,6 @@ export function Manage({ token }: { token: string }) {
       <ManualAdd onAdd={addArtist} />
       <hr />
       <button className="danger" onClick={unsubscribe}>退订全部提醒</button>
-      <button className="link" onClick={forgetDevice}>退出（忘记此设备）</button>
     </main>
   );
 }
