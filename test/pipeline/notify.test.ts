@@ -24,6 +24,7 @@ it("sends one reminder per candidate and marks shows sent", async () => {
   const show = await upsertShow(env.DB, {
     showstartId: "1", title: "刺猬专场", cityCode: "110000", venue: "MAO",
     showTime: "2026-08-01T20:00:00", price: "180", url: "https://x/1", performers: ["刺猬"],
+    poster: "https://s2.showstart.com/1.jpg",
   });
   await persistMatches(env.DB, [{ showId: show.id, artistId, matchedBy: "performer" }]);
 

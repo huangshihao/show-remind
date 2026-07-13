@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS shows (
   price TEXT,
   url TEXT NOT NULL,
   performers TEXT NOT NULL DEFAULT '[]',
+  poster TEXT,
   first_seen_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_shows_city ON shows(city_code);

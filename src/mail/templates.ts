@@ -9,6 +9,10 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function posterThumb(url: string): string {
+  return url.includes("?") ? url : `${url}?imageMogr2/thumbnail/!360x0/quality/85`;
+}
+
 export function manageUrl(baseUrl: string, token: string): string {
   return `${baseUrl}/manage?token=${token}`;
 }
@@ -39,7 +43,10 @@ export function reminderEmail(
       const venue = escapeHtml(s.venue ?? "待定");
       const price = escapeHtml(s.price ?? "待定");
       const url = escapeHtml(s.url);
-      return `<li><b>${maybe}${artists}</b> — ${escapeHtml(s.title)}<br/>
+      const poster = s.poster
+        ? `<img src="${escapeHtml(posterThumb(s.poster))}" alt="" width="160" style="max-width:160px;height:auto;border-radius:8px;display:block;margin-bottom:6px"/>`
+        : "";
+      return `<li>${poster}<b>${maybe}${artists}</b> — ${escapeHtml(s.title)}<br/>
         场馆:${venue} · 时间:${escapeHtml(when)} · 票价:${price}<br/>
         <a href="${url}">${url}</a></li>`;
     })

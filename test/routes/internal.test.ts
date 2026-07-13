@@ -13,11 +13,11 @@ it("rejects without the internal secret", async () => {
 
 it("crawls a city when the secret matches", async () => {
   vi.spyOn(showstart, "fetchCityShows").mockResolvedValue({
-    shows: [{ showstartId: "1", title: "x", cityCode: "110000", showTime: null, url: "u1" }],
+    shows: [{ showstartId: "1", title: "x", cityCode: "110000", showTime: null, url: "u1", poster: null }],
   });
   vi.spyOn(showstart, "fetchShowDetail").mockResolvedValue({
     showstartId: "1", title: "x", cityCode: "110000", venue: null,
-    showTime: null, price: null, url: "u1", performers: ["刺猬"],
+    showTime: null, price: null, url: "u1", performers: ["刺猬"], poster: null,
   });
   const res = await app.request(
     "/internal/crawl?city=110000",

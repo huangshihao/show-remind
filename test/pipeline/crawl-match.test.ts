@@ -12,13 +12,14 @@ beforeEach(applySchema);
 it("crawlCity upserts only unseen shows and returns their ids", async () => {
   vi.spyOn(showstart, "fetchCityShows").mockResolvedValue({
     shows: [
-      { showstartId: "1", title: "刺猬专场", cityCode: "110000", showTime: null, url: "u1" },
-      { showstartId: "2", title: "达达", cityCode: "110000", showTime: null, url: "u2" },
+      { showstartId: "1", title: "刺猬专场", cityCode: "110000", showTime: null, url: "u1", poster: null },
+      { showstartId: "2", title: "达达", cityCode: "110000", showTime: null, url: "u2", poster: null },
     ],
   });
   vi.spyOn(showstart, "fetchShowDetail").mockImplementation(async (id: string) => ({
     showstartId: id, title: `t${id}`, cityCode: "110000", venue: "MAO",
     showTime: "2026-08-01T20:00:00", price: "180", url: `u${id}`, performers: ["刺猬"],
+    poster: `https://s2.showstart.com/${id}.jpg`,
   }));
 
   const ids = await crawlCity(env.DB, "110000");
@@ -30,11 +31,11 @@ it("crawlCity upserts only unseen shows and returns their ids", async () => {
 
 it("matchNewShows links shows to followed artists by performer", async () => {
   vi.spyOn(showstart, "fetchCityShows").mockResolvedValue({
-    shows: [{ showstartId: "1", title: "x", cityCode: "110000", showTime: null, url: "u1" }],
+    shows: [{ showstartId: "1", title: "x", cityCode: "110000", showTime: null, url: "u1", poster: null }],
   });
   vi.spyOn(showstart, "fetchShowDetail").mockResolvedValue({
     showstartId: "1", title: "x", cityCode: "110000", venue: null,
-    showTime: null, price: null, url: "u1", performers: ["刺猬"],
+    showTime: null, price: null, url: "u1", performers: ["刺猬"], poster: null,
   });
   await upsertArtist(env.DB, "刺猬");
   const ids = await crawlCity(env.DB, "110000");

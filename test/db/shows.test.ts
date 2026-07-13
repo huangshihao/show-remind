@@ -17,6 +17,7 @@ const detail = (showstartId: string) => ({
   price: "180",
   url: `https://wap.showstart.com/x/${showstartId}`,
   performers: ["刺猬"],
+  poster: "https://s2.showstart.com/x.jpg",
 });
 
 it("upsertShow inserts once and keeps id on re-upsert", async () => {
@@ -45,4 +46,5 @@ it("getShowsByIds returns parsed rows", async () => {
   const [row] = await getShowsByIds(db(), [s.id]);
   expect(row.performers).toEqual(["刺猬"]);
   expect(row.title).toBe("Show 100");
+  expect(row.poster).toBe("https://s2.showstart.com/x.jpg");
 });

@@ -5,6 +5,7 @@ import type { NotifyShow } from "../../src/db/notifications";
 const show: NotifyShow = {
   showId: "s1", title: "刺猬专场 <x>", cityCode: "110000", venue: "MAO",
   showTime: "2026-08-01T20:00:00", price: "180", url: "https://wap.showstart.com/x/1",
+  poster: "https://s2.showstart.com/x.jpg",
   artistNames: ["刺猬"], hasTitleOnlyMatch: false,
 };
 
@@ -21,6 +22,17 @@ it("reminderEmail lists shows and has manage + unsubscribe footer links", () => 
   expect(html).toContain("https://s.com/api/manage/unsubscribe?token=tok123");
   // HTML-escapes the title angle brackets
   expect(html).toContain("&lt;x&gt;");
+});
+
+it("reminderEmail renders a poster thumbnail when the show has a poster", () => {
+  const { html } = reminderEmail([show], "https://s.com", "tok123");
+  expect(html).toContain("<img");
+  expect(html).toContain("https://s2.showstart.com/x.jpg?imageMogr2/thumbnail/!360x0/quality/85");
+});
+
+it("reminderEmail renders no img tag when the show has no poster", () => {
+  const { html } = reminderEmail([{ ...show, poster: null }], "https://s.com", "tok123");
+  expect(html).not.toContain("<img");
 });
 
 it("reminderEmail marks title-only matches as maybe-related", () => {

@@ -57,6 +57,7 @@ export interface ShowSummary {
   cityCode: string;
   showTime: string | null;
   url: string;
+  poster: string | null;
 }
 
 export interface ShowDetail {
@@ -68,6 +69,7 @@ export interface ShowDetail {
   price: string | null;
   url: string;
   performers: string[];
+  poster: string | null;
 }
 
 export class ShowstartClient {
@@ -183,6 +185,7 @@ export function transformShowList(raw: any, cityCode: string): { shows: ShowSumm
       cityCode: String(row?.cityId ?? cityCode),
       showTime: normalizeShowTime(row?.showTime),
       url: detailUrl(id),
+      poster: row?.avatar ?? null,
     });
   }
   return { shows };
@@ -227,6 +230,7 @@ export function transformShowDetail(raw: any): ShowDetail {
     price: price != null && price !== "" ? String(price) : null,
     url: detailUrl(id),
     performers: detailPerformers(result),
+    poster: result?.avatar ?? null,
   };
 }
 

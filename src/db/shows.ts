@@ -9,6 +9,7 @@ export interface ShowInput {
   price: string | null;
   url: string;
   performers: string[];
+  poster: string | null;
 }
 
 export interface ShowRow extends ShowInput {
@@ -25,6 +26,7 @@ interface RawRow {
   price: string | null;
   url: string;
   performers: string;
+  poster: string | null;
 }
 
 function toRow(r: RawRow): ShowRow {
@@ -38,6 +40,7 @@ function toRow(r: RawRow): ShowRow {
     price: r.price,
     url: r.url,
     performers: JSON.parse(r.performers),
+    poster: r.poster,
   };
 }
 
@@ -60,12 +63,12 @@ export async function upsertShow(db: D1Database, s: ShowInput): Promise<ShowRow>
   const id = existing?.id ?? newId();
   await db
     .prepare(
-      `INSERT INTO shows (id, showstart_id, title, city_code, venue, show_time, price, url, performers)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO shows (id, showstart_id, title, city_code, venue, show_time, price, url, performers, poster)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(showstart_id) DO UPDATE SET
          title=excluded.title, city_code=excluded.city_code, venue=excluded.venue,
          show_time=excluded.show_time, price=excluded.price, url=excluded.url,
-         performers=excluded.performers`,
+         performers=excluded.performers, poster=excluded.poster`,
     )
     .bind(
       id,
@@ -77,6 +80,7 @@ export async function upsertShow(db: D1Database, s: ShowInput): Promise<ShowRow>
       s.price,
       s.url,
       JSON.stringify(s.performers),
+      s.poster,
     )
     .run();
   return { ...s, id };

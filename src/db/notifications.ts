@@ -6,6 +6,7 @@ export interface NotifyShow {
   showTime: string | null;
   price: string | null;
   url: string;
+  poster: string | null;
   artistNames: string[];
   hasTitleOnlyMatch: boolean;
 }
@@ -29,6 +30,7 @@ interface JoinRow {
   show_time: string | null;
   price: string | null;
   url: string;
+  poster: string | null;
   artist_name: string;
   matched_by: string;
 }
@@ -39,7 +41,7 @@ export async function findNotifyCandidates(db: D1Database): Promise<Candidate[]>
   const { results } = await db
     .prepare(
       `SELECT s.id AS subscription_id, s.email, s.token, s.cities,
-              sh.id AS show_id, sh.title, sh.city_code, sh.venue, sh.show_time, sh.price, sh.url,
+              sh.id AS show_id, sh.title, sh.city_code, sh.venue, sh.show_time, sh.price, sh.url, sh.poster,
               a.name AS artist_name, xsa.matched_by
        FROM subscriptions s
        JOIN subscription_artists sa ON sa.subscription_id = s.id
@@ -74,6 +76,7 @@ export async function findNotifyCandidates(db: D1Database): Promise<Candidate[]>
         showTime: r.show_time,
         price: r.price,
         url: r.url,
+        poster: r.poster,
         artistNames: [],
         hasTitleOnlyMatch: true,
       };

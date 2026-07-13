@@ -25,6 +25,7 @@ const LIST_RAW = {
         siteName: "菇的LIVE·蘑菇洞",
         showTime: "2026.07.12 本周日 20:00",
         activityPrice: "¥150起",
+        avatar: "https://s2.showstart.com/list/299995.jpg?imageView2/1/w/200",
       },
       { activityId: 100002, title: "重塑雕像的权利 北京站", cityId: "10", showTime: "2026.08.15 周六 20:30" },
     ],
@@ -41,11 +42,16 @@ describe("transformShowList", () => {
       cityCode: "10",
       showTime: "2026-07-12T20:00:00",
       url: "https://wap.showstart.com/pages/activity/detail/detail?activityId=299995",
+      poster: "https://s2.showstart.com/list/299995.jpg?imageView2/1/w/200",
     });
   });
   it("falls back to the passed cityCode when a row has no cityId", () => {
     const raw = { result: { activityInfo: [{ activityId: 1, title: "x" }] } };
     expect(transformShowList(raw, "20").shows[0].cityCode).toBe("20");
+  });
+  it("returns poster: null when a row has no avatar", () => {
+    const raw = { result: { activityInfo: [{ activityId: 100002, title: "x" }] } };
+    expect(transformShowList(raw, "10").shows[0].poster).toBeNull();
   });
   it("returns empty shows for a missing result", () => {
     expect(transformShowList({}, "10").shows).toEqual([]);
@@ -62,6 +68,7 @@ const DETAIL_RAW = {
     cityId: "10",
     showTime: "2026.07.12 本周日 20:00",
     price: "¥150 - 288",
+    avatar: "https://s2.showstart.com/detail/299995.jpg",
     site: { siteName: "菇的LIVE·蘑菇洞" },
     host: [{ name: "WhyU传媒", activityRoleType: 5 }],
     sessionUserInfos: [
@@ -87,5 +94,10 @@ describe("transformShowDetail", () => {
     expect(d.price).toBe("¥150 - 288");
     expect(d.showTime).toBe("2026-07-12T20:00:00");
     expect(d.url).toBe("https://wap.showstart.com/pages/activity/detail/detail?activityId=299995");
+    expect(d.poster).toBe("https://s2.showstart.com/detail/299995.jpg");
+  });
+  it("returns poster: null when result has no avatar", () => {
+    const d = transformShowDetail({ result: { activityId: 1 } });
+    expect(d.poster).toBeNull();
   });
 });
