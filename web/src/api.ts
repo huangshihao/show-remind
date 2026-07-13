@@ -16,7 +16,13 @@ export const resolveLink = (link: string, turnstileToken?: string) =>
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ link, turnstileToken }),
-  }).then((r) => json<{ platform: string; title: string; artists: { name: string; songCount: number }[] }>(r));
+  }).then((r) =>
+    json<{
+      platform: string;
+      title: string;
+      artists: { name: string; songCount: number; avatar?: string | null }[];
+    }>(r),
+  );
 
 export const subscribe = (payload: {
   email: string;

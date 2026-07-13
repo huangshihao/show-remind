@@ -1,8 +1,28 @@
 import { useEffect, useReducer, useState } from "react";
-import { initialWizard, wizardReducer, selectedArtistNames } from "./wizard-state";
+import { initialWizard, wizardReducer, selectedArtistNames, type Selectable } from "./wizard-state";
 import { getConfig, resolveLink, subscribe, requestLogin, type Config } from "./api";
 import { Turnstile } from "./Turnstile";
 import { getStoredToken } from "./session";
+
+const PALETTE = ["#3b5bdb", "#0ca678", "#e8590c", "#ae3ec9", "#1098ad", "#d6336c", "#5c7cfa", "#f08c00"];
+
+export function initialColor(name: string): string {
+  let sum = 0;
+  for (let i = 0; i < name.length; i++) sum += name.charCodeAt(i);
+  return PALETTE[sum % PALETTE.length];
+}
+
+function ArtistAvatar({ artist }: { artist: Selectable }) {
+  if (artist.avatar) {
+    return <img className="artist-avatar" src={artist.avatar} alt={artist.name} loading="lazy" />;
+  }
+  const initial = artist.name.trim().charAt(0) || "?";
+  return (
+    <span className="artist-initial" style={{ background: initialColor(artist.name) }} aria-hidden="true">
+      {initial}
+    </span>
+  );
+}
 
 export function Wizard() {
   const [state, dispatch] = useReducer(wizardReducer, undefined, initialWizard);
@@ -84,20 +104,27 @@ export function Wizard() {
       {state.step === 1 && (
         <>
           <label>选择要关注的音乐人（{selectedArtistNames(state).length}）</label>
-          <ul className="artists">
-            {state.artists.map((a) => (
-              <li key={a.name}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={state.selected.includes(a.name)}
-                    onChange={() => dispatch({ type: "TOGGLE_ARTIST", name: a.name })}
-                  />
-                  {a.name} {a.songCount > 0 && <span className="count">· {a.songCount} 首</span>}
-                </label>
-              </li>
-            ))}
-          </ul>
+          <div className="artist-grid">
+            {state.artists.map((a) => {
+              const selected = state.selected.includes(a.name);
+              return (
+                <button
+                  key={a.name}
+                  type="button"
+                  className={`artist-card${selected ? " selected" : ""}`}
+                  aria-pressed={selected}
+                  onClick={() => dispatch({ type: "TOGGLE_ARTIST", name: a.name })}
+                >
+                  <span className="artist-avatar-wrap">
+                    <ArtistAvatar artist={a} />
+                    {selected && <span className="artist-check" aria-hidden="true">✓</span>}
+                  </span>
+                  <span className="artist-name">{a.name}</span>
+                  {a.songCount > 0 && <span className="count">{a.songCount} 首</span>}
+                </button>
+              );
+            })}
+          </div>
           <ManualAdd onAdd={(name) => dispatch({ type: "ADD_MANUAL", name })} />
           <button disabled={!selectedArtistNames(state).length} onClick={() => dispatch({ type: "GOTO", step: 2 })}>
             下一步：选城市

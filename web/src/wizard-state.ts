@@ -1,6 +1,7 @@
 export interface Selectable {
   name: string;
   songCount: number;
+  avatar?: string | null;
 }
 
 export interface WizardState {
