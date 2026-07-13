@@ -8,11 +8,51 @@ import {
   removeArtist,
   countArtists,
 } from "../db/subscription-artists";
+import { setArtistAvatar, type ArtistRow } from "../db/artists";
+import { searchArtist } from "@/lib/sources/showstart";
 import { resolvePlaylist } from "../services/resolve";
 import { validCities, MAX_ARTISTS } from "../services/limits";
 import { verifyTurnstile } from "../turnstile";
 
 export const manageRouter = new Hono<{ Bindings: Env }>();
+
+// Cap avatar lookups per manage load to stay well under the 50-subrequest
+// budget; artists past the cap keep avatar: null and get filled on a later
+// load. See src/services/resolve.ts for the same reasoning.
+const AVATAR_LOOKUP_LIMIT = 30;
+// One slow Showstart search shouldn't hang the whole manage response.
+const AVATAR_LOOKUP_TIMEOUT_MS = 4000;
+
+function searchArtistWithTimeout(name: string): Promise<Awaited<ReturnType<typeof searchArtist>>> {
+  let timer!: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), AVATAR_LOOKUP_TIMEOUT_MS);
+  });
+  return Promise.race([searchArtist(name), timeout]).finally(() => clearTimeout(timer));
+}
+
+// Lazily backfill avatars for artists that were never looked up (avatar === null).
+// avatar semantics: null = never searched, "" = searched but Showstart had no
+// match (don't re-search), a URL = found. Mutates rows in place; never throws.
+async function backfillAvatars(db: D1Database, artists: ArtistRow[]): Promise<void> {
+  const pending = artists.filter((a) => a.avatar === null).slice(0, AVATAR_LOOKUP_LIMIT);
+  await Promise.all(
+    pending.map(async (artist) => {
+      try {
+        const hit = await searchArtistWithTimeout(artist.name);
+        if (hit?.avatar) {
+          await setArtistAvatar(db, artist.id, hit.avatar);
+          artist.avatar = hit.avatar;
+        } else {
+          await setArtistAvatar(db, artist.id, ""); // mark searched-empty
+          artist.avatar = "";
+        }
+      } catch {
+        // timeout/error → leave as-is (null), retried on a later load
+      }
+    }),
+  );
+}
 
 // Resolve the token on every request; 404 (not 401/403) to avoid leaking existence.
 async function requireSub(c: any): Promise<SubscriptionRow | null> {
@@ -25,10 +65,12 @@ manageRouter.get("/", async (c) => {
   const sub = await requireSub(c);
   if (!sub) return c.notFound();
   const artists = await listArtists(c.env.DB, sub.id);
+  await backfillAvatars(c.env.DB, artists);
   return c.json({
     email: sub.email,
     cities: sub.cities,
-    artists: artists.map((a) => ({ id: a.id, name: a.name })),
+    // "" (searched-empty) collapses to null so the frontend shows a placeholder.
+    artists: artists.map((a) => ({ id: a.id, name: a.name, avatar: a.avatar || null })),
   });
 });
 

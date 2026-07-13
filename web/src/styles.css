@@ -41,3 +41,10 @@ button.danger { background: #e03131; }
 .err { color: #e03131; }
 .manual { display: flex; gap: 8px; align-items: center; }
 .manual input { flex: 1; }
+
+.artists { list-style: none; padding: 0; margin: 8px 0; }
+.manage-artist { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.manage-artist .artist-avatar, .manage-artist .artist-initial { flex: 0 0 auto; }
+.manage-artist-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.manage-artist button { margin-top: 0; }

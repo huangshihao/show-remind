@@ -46,17 +46,18 @@ export async function setArtists(
 export async function listArtists(db: D1Database, subscriptionId: string): Promise<ArtistRow[]> {
   const { results } = await db
     .prepare(
-      `SELECT a.id, a.name, a.normalized_name, a.aliases
+      `SELECT a.id, a.name, a.normalized_name, a.aliases, a.avatar
        FROM artists a JOIN subscription_artists sa ON sa.artist_id = a.id
        WHERE sa.subscription_id = ? ORDER BY a.name`,
     )
     .bind(subscriptionId)
-    .all<{ id: string; name: string; normalized_name: string; aliases: string }>();
+    .all<{ id: string; name: string; normalized_name: string; aliases: string; avatar: string | null }>();
   return results.map((r) => ({
     id: r.id,
     name: r.name,
     normalizedName: r.normalized_name,
     aliases: JSON.parse(r.aliases),
+    avatar: r.avatar,
   }));
 }
 

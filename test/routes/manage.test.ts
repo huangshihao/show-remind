@@ -1,11 +1,20 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
 import { applySchema } from "../db/apply-schema";
 import { app } from "../../src/index";
 import { createPendingSubscription, activateByToken } from "../../src/db/subscriptions";
 import { setArtists, listArtists } from "../../src/db/subscription-artists";
+import * as showstart from "@/lib/sources/showstart";
 
 beforeEach(applySchema);
+// GET /api/manage lazily backfills avatars via searchArtist; default it to "no
+// match" so tests never touch the network. Individual tests override as needed.
+beforeEach(() => {
+  vi.spyOn(showstart, "searchArtist").mockResolvedValue(null);
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 async function activeSub() {
   const sub = await createPendingSubscription(env.DB, "a@b.com", ["110000"]);
@@ -25,6 +34,35 @@ it("GET manage returns the subscription view", async () => {
   expect(body.email).toBe("a@b.com");
   expect(body.cities).toEqual(["110000"]);
   expect(body.artists.map((a: any) => a.name)).toEqual(["刺猬"]);
+});
+
+it("GET manage backfills avatars from Showstart and caches them (no re-search)", async () => {
+  const sub = await createPendingSubscription(env.DB, "c@d.com", ["110000"]);
+  await activateByToken(env.DB, sub.token);
+  await setArtists(env.DB, sub.id, ["刺猬", "海龟先生"]);
+
+  const AVATAR = "https://s2.showstart.com/img/2503.jpg";
+  const spy = vi.spyOn(showstart, "searchArtist").mockImplementation(async (name: string) =>
+    name === "刺猬"
+      ? { id: 2503, name: "刺猬Hedgehog", avatar: AVATAR, fansNum: 337604 }
+      : null,
+  );
+
+  const byName = (body: any) =>
+    Object.fromEntries(body.artists.map((a: any) => [a.name, a.avatar]));
+
+  const first = await app.request(`/api/manage?token=${sub.token}`, {}, env);
+  expect(first.status).toBe(200);
+  expect(byName(await first.json())).toEqual({ 刺猬: AVATAR, 海龟先生: null });
+  // One lookup per never-searched artist.
+  expect(spy).toHaveBeenCalledTimes(2);
+
+  // Second load: 刺猬 is now a cached URL, 海龟先生 a cached "" (searched-empty).
+  // Neither is null anymore, so no further searches fire.
+  const second = await app.request(`/api/manage?token=${sub.token}`, {}, env);
+  expect(second.status).toBe(200);
+  expect(byName(await second.json())).toEqual({ 刺猬: AVATAR, 海龟先生: null });
+  expect(spy).toHaveBeenCalledTimes(2);
 });
 
 it("unknown token returns 404 everywhere", async () => {

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { clearToken, storeToken } from "./session";
+import { ArtistAvatar } from "./ArtistAvatar";
 
 interface View {
   email: string;
   cities: string[];
-  artists: { id: string; name: string }[];
+  artists: { id: string; name: string; avatar?: string | null }[];
 }
 
 export function Manage({ token }: { token: string }) {
@@ -64,8 +65,10 @@ export function Manage({ token }: { token: string }) {
       <h3>音乐人</h3>
       <ul className="artists">
         {view.artists.map((a) => (
-          <li key={a.id}>
-            {a.name} <button className="link" onClick={() => removeArtist(a.id)}>移除</button>
+          <li key={a.id} className="manage-artist">
+            <ArtistAvatar name={a.name} avatar={a.avatar} size={40} />
+            <span className="manage-artist-name">{a.name}</span>
+            <button className="link" onClick={() => removeArtist(a.id)}>移除</button>
           </li>
         ))}
       </ul>

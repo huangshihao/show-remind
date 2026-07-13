@@ -1,40 +1,12 @@
 import { useEffect, useReducer, useState } from "react";
-import { initialWizard, wizardReducer, selectedArtistNames, type Selectable } from "./wizard-state";
+import { initialWizard, wizardReducer, selectedArtistNames } from "./wizard-state";
 import { getConfig, resolveLink, subscribe, requestLogin, type Config } from "./api";
 import { Turnstile } from "./Turnstile";
 import { getStoredToken } from "./session";
+import { ArtistAvatar, initialColor } from "./ArtistAvatar";
 
-const PALETTE = ["#3b5bdb", "#0ca678", "#e8590c", "#ae3ec9", "#1098ad", "#d6336c", "#5c7cfa", "#f08c00"];
-
-export function initialColor(name: string): string {
-  let sum = 0;
-  for (let i = 0; i < name.length; i++) sum += name.charCodeAt(i);
-  return PALETTE[sum % PALETTE.length];
-}
-
-function ArtistAvatar({ artist }: { artist: Selectable }) {
-  // Fall back to the initial circle if the photo fails to load (a Showstart
-  // avatar URL can 404), instead of showing the browser's broken-image icon.
-  const [imgFailed, setImgFailed] = useState(false);
-  if (artist.avatar && !imgFailed) {
-    return (
-      <img
-        className="artist-avatar"
-        src={artist.avatar}
-        alt={artist.name}
-        loading="lazy"
-        onError={() => setImgFailed(true)}
-      />
-    );
-  }
-  // Codepoint-aware first character (handles astral emoji, CJK unaffected).
-  const initial = [...artist.name.trim()][0] ?? "?";
-  return (
-    <span className="artist-initial" style={{ background: initialColor(artist.name) }} aria-hidden="true">
-      {initial}
-    </span>
-  );
-}
+// Re-exported for existing importers; the source of truth now lives in ArtistAvatar.
+export { initialColor };
 
 export function Wizard() {
   const [state, dispatch] = useReducer(wizardReducer, undefined, initialWizard);
@@ -128,7 +100,7 @@ export function Wizard() {
                   onClick={() => dispatch({ type: "TOGGLE_ARTIST", name: a.name })}
                 >
                   <span className="artist-avatar-wrap">
-                    <ArtistAvatar artist={a} />
+                    <ArtistAvatar name={a.name} avatar={a.avatar} />
                     {selected && <span className="artist-check" aria-hidden="true">✓</span>}
                   </span>
                   <span className="artist-name">{a.name}</span>

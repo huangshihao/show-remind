@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS artists (
   name TEXT NOT NULL,
   normalized_name TEXT NOT NULL UNIQUE,
   aliases TEXT NOT NULL DEFAULT '[]',
+  avatar TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
