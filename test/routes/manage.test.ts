@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
 import { applySchema } from "../db/apply-schema";
 import app from "../../src/index";
@@ -53,4 +53,44 @@ it("unsubscribe deletes the subscription", async () => {
   const res = await app.request(`/api/manage/unsubscribe?token=${sub.token}`, {}, env);
   expect(res.status).toBe(200);
   expect((await app.request(`/api/manage?token=${sub.token}`, {}, env)).status).toBe(404);
+});
+
+it("import only counts newly-linked artists toward added/cap, not already-followed ones", async () => {
+  const sub = await activeSub();
+  const before = (await listArtists(env.DB, sub.id)).length;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          request: {
+            code: 0,
+            data: {
+              dirinfo: { title: "My List" },
+              songlist_size: 2,
+              songlist: [
+                { name: "s1", singer: [{ name: "痛仰乐队" }] },
+                { name: "s2", singer: [{ name: "海龟先生" }] },
+              ],
+            },
+          },
+        }),
+      ),
+    ),
+  );
+  const body = j({ link: "https://y.qq.com/n/ryqq/playlist/12345" });
+
+  const first = await app.request(`/api/manage/import?token=${sub.token}`, body, env);
+  expect(first.status).toBe(200);
+  const firstBody = (await first.json()) as any;
+  expect(firstBody.added).toBe(2);
+  expect((await listArtists(env.DB, sub.id)).length).toBe(before + 2);
+
+  const second = await app.request(`/api/manage/import?token=${sub.token}`, body, env);
+  expect(second.status).toBe(200);
+  const secondBody = (await second.json()) as any;
+  expect(secondBody.added).toBe(0);
+  expect((await listArtists(env.DB, sub.id)).length).toBe(before + 2);
+
+  vi.unstubAllGlobals();
 });

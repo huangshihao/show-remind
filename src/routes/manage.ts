@@ -4,6 +4,7 @@ import { getByToken, setCities, deleteByToken, type SubscriptionRow } from "../d
 import {
   listArtists,
   addArtistToSubscription,
+  addArtistReturningInserted,
   removeArtist,
   countArtists,
 } from "../db/subscription-artists";
@@ -79,8 +80,8 @@ manageRouter.post("/import", async (c) => {
   let added = 0;
   for (const a of resolved.artists) {
     if (added >= cap) break;
-    await addArtistToSubscription(c.env.DB, sub.id, a.name);
-    added++;
+    const { inserted } = await addArtistReturningInserted(c.env.DB, sub.id, a.name);
+    if (inserted) added++;
   }
   const artists = await listArtists(c.env.DB, sub.id);
   return c.json({ added, artists: artists.map((x) => ({ id: x.id, name: x.name })) });
