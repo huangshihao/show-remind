@@ -30,7 +30,7 @@
     "APP_BASE_URL": "https://show.build4funhsh.cc",
     // Verified sender address for outgoing mail (must be verified with your mail
     // provider, e.g. a Resend domain/sender).
-    "MAIL_FROM": "Show Remind <notify@example.com>",
+    "MAIL_FROM": "Show Remind <notify@build4funhsh.cc>",
     // "0" = personal/self-host instance (no Turnstile, no public-instance limits).
     // "1" = public instance: enables Turnstile on /api/resolve + /api/subscribe
     // and enforces artist/city caps. Requires TURNSTILE_SECRET (secret) and
