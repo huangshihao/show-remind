@@ -2,6 +2,7 @@ import { useEffect, useReducer, useState } from "react";
 import { initialWizard, wizardReducer, selectedArtistNames } from "./wizard-state";
 import { getConfig, resolveLink, subscribe, type Config } from "./api";
 import { Turnstile } from "./Turnstile";
+import { getStoredToken } from "./session";
 
 export function Wizard() {
   const [state, dispatch] = useReducer(wizardReducer, undefined, initialWizard);
@@ -59,6 +60,9 @@ export function Wizard() {
     <main className="card">
       <h1>Show-Remind</h1>
       <p className="sub">粘贴歌单，选关注的音乐人，留个邮箱，有新演出就发邮件。</p>
+      {getStoredToken() && (
+        <p className="sub"><a href="/manage">← 我已经订阅过 · 管理我的关注</a></p>
+      )}
       {error && <p className="err">{error}</p>}
 
       {state.step === 0 && (

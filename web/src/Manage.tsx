@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { clearToken, storeToken } from "./session";
 
 interface View {
   email: string;
@@ -12,8 +13,12 @@ export function Manage({ token }: { token: string }) {
 
   async function reload() {
     const res = await fetch(`/api/manage?token=${token}`);
-    if (!res.ok) return setError("链接无效或已退订");
+    if (!res.ok) {
+      clearToken();
+      return setError("链接无效或已退订");
+    }
     setView(await res.json());
+    storeToken(token);
   }
   useEffect(() => {
     reload();
@@ -33,8 +38,14 @@ export function Manage({ token }: { token: string }) {
   }
   async function unsubscribe() {
     await fetch(`/api/manage/unsubscribe?token=${token}`, { method: "POST" });
+    clearToken();
     setView(null);
     setError("已退订。想重新订阅请回首页。");
+  }
+
+  function forgetDevice() {
+    clearToken();
+    window.location.href = "/";
   }
 
   if (error) return <main className="card"><p>{error}</p></main>;
@@ -55,6 +66,7 @@ export function Manage({ token }: { token: string }) {
       <ManualAdd onAdd={addArtist} />
       <hr />
       <button className="danger" onClick={unsubscribe}>退订全部提醒</button>
+      <button className="link" onClick={forgetDevice}>退出（忘记此设备）</button>
     </main>
   );
 }
