@@ -1,7 +1,7 @@
 // NetEase plaintext API. The weapi encrypted gateway is soft-blocked for
 // overseas (Cloudflare) egress IPs — returns HTTP 200 with an empty body.
 // The plaintext /api/ endpoints are not IP-restricted and return the same JSON.
-// See docs/showstart-reverse-engineering.md and spec §6 (2026-07-13 spike).
+// See docs/superpowers/specs/2026-07-13-cloudflare-open-source-refactor-design.md §6 and spec (2026-07-13 spike).
 
 const HEADERS = {
   "Content-Type": "application/x-www-form-urlencoded",
@@ -20,7 +20,11 @@ async function post(url: string, form: Record<string, string>): Promise<any> {
   if (!resp.ok || text.length === 0) {
     throw new Error(`netease ${url} responded status=${resp.status} len=${text.length}`);
   }
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`netease ${url} non-JSON body status=${resp.status}`);
+  }
 }
 
 export async function fetchPlaylistDetailRaw(externalId: string): Promise<any> {
