@@ -26,7 +26,8 @@
     },
     "allowJs": true,
     "skipLibCheck": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "types": ["@cloudflare/vitest-pool-workers", "@cloudflare/vitest-pool-workers/types"]
   },
   "include": [
     "next-env.d.ts",
