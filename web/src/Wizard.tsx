@@ -13,10 +13,22 @@ export function initialColor(name: string): string {
 }
 
 function ArtistAvatar({ artist }: { artist: Selectable }) {
-  if (artist.avatar) {
-    return <img className="artist-avatar" src={artist.avatar} alt={artist.name} loading="lazy" />;
+  // Fall back to the initial circle if the photo fails to load (a Showstart
+  // avatar URL can 404), instead of showing the browser's broken-image icon.
+  const [imgFailed, setImgFailed] = useState(false);
+  if (artist.avatar && !imgFailed) {
+    return (
+      <img
+        className="artist-avatar"
+        src={artist.avatar}
+        alt={artist.name}
+        loading="lazy"
+        onError={() => setImgFailed(true)}
+      />
+    );
   }
-  const initial = artist.name.trim().charAt(0) || "?";
+  // Codepoint-aware first character (handles astral emoji, CJK unaffected).
+  const initial = [...artist.name.trim()][0] ?? "?";
   return (
     <span className="artist-initial" style={{ background: initialColor(artist.name) }} aria-hidden="true">
       {initial}
