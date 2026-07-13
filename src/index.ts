@@ -3,6 +3,7 @@ import type { Env } from "./env";
 import { resolveRouter } from "./routes/resolve";
 import { subscribeRouter } from "./routes/subscribe";
 import { confirmRouter } from "./routes/confirm";
+import { manageRouter } from "./routes/manage";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -16,5 +17,6 @@ app.get("/api/health", (c) => c.json({ ok: true }));
 app.route("/api/resolve", resolveRouter);
 app.route("/api/subscribe", subscribeRouter);
 app.route("/api/confirm", confirmRouter);
+app.route("/api/manage", manageRouter);
 
 export default app;
