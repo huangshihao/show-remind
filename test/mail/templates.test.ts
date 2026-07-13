@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { confirmEmail, reminderEmail } from "../../src/mail/templates";
+import { confirmEmail, loginEmail, reminderEmail } from "../../src/mail/templates";
 import type { NotifyShow } from "../../src/db/notifications";
 
 const show: NotifyShow = {
@@ -13,6 +13,12 @@ it("confirmEmail links to /api/confirm with the token", () => {
   const { subject, html } = confirmEmail("https://s.com", "tok123");
   expect(subject).toBeTruthy();
   expect(html).toContain("https://s.com/api/confirm?token=tok123");
+});
+
+it("loginEmail links to the /manage page with the token", () => {
+  const { subject, html } = loginEmail("https://s.com", "tok123");
+  expect(subject).toBeTruthy();
+  expect(html).toContain("https://s.com/manage?token=tok123");
 });
 
 it("reminderEmail has only an unsubscribe link in the footer (no manage link)", () => {

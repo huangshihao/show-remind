@@ -28,7 +28,17 @@ loginRouter.post("/", async (c) => {
   if (sub) {
     const mail = getMailProvider(c.env);
     const { subject, html } = loginEmail(c.env.APP_BASE_URL, sub.token);
-    await mail.send({ to: sub.email, subject, html });
+    // Fire-and-forget so the response returns in constant time whether or not
+    // the email exists (no timing side-channel), and a mail-provider failure
+    // can never turn into a 500-vs-200 existence oracle. waitUntil keeps the
+    // send alive past the response; fall back to a bare promise in tests where
+    // there is no ExecutionContext.
+    const sending = mail.send({ to: sub.email, subject, html }).catch(() => {});
+    try {
+      c.executionCtx.waitUntil(sending);
+    } catch {
+      void sending;
+    }
   }
 
   // Always ok:true — never reveal whether the email has a subscription.
