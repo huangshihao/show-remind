@@ -13,10 +13,6 @@ function posterThumb(url: string): string {
   return url.includes("?") ? url : `${url}?imageMogr2/thumbnail/!360x0/quality/85`;
 }
 
-export function manageUrl(baseUrl: string, token: string): string {
-  return `${baseUrl}/manage?token=${token}`;
-}
-
 export function unsubscribeUrl(baseUrl: string, token: string): string {
   return `${baseUrl}/api/manage/unsubscribe?token=${token}`;
 }
@@ -52,7 +48,6 @@ export function reminderEmail(
     })
     .join("");
   const footer = `<hr/><p style="font-size:12px;color:#888">
-    <a href="${manageUrl(baseUrl, token)}">管理我的关注</a> ·
     <a href="${unsubscribeUrl(baseUrl, token)}">退订</a></p>`;
   return {
     subject: "你关注的音乐人有新演出",

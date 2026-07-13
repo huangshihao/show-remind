@@ -15,10 +15,12 @@ it("confirmEmail links to /api/confirm with the token", () => {
   expect(html).toContain("https://s.com/api/confirm?token=tok123");
 });
 
-it("reminderEmail lists shows and has manage + unsubscribe footer links", () => {
+it("reminderEmail has only an unsubscribe link in the footer (no manage link)", () => {
   const { html } = reminderEmail([show], "https://s.com", "tok123");
   expect(html).toContain("刺猬");
-  expect(html).toContain("https://s.com/manage?token=tok123");
+  // footer no longer links to the /manage page
+  expect(html).not.toContain("https://s.com/manage?token=tok123");
+  // one-click unsubscribe link remains
   expect(html).toContain("https://s.com/api/manage/unsubscribe?token=tok123");
   // HTML-escapes the title angle brackets
   expect(html).toContain("&lt;x&gt;");
