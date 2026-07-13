@@ -22,16 +22,21 @@ export function ArtistAvatar({
 }: {
   name: string;
   avatar?: string | null;
-  size?: number;
+  // A number renders a fixed-size circle (px). "fill" renders a tile that
+  // fills its container (width/height 100%) — used by the manage-page photo
+  // grid, whose square tiles are sized by CSS grid, not a fixed pixel value.
+  size?: number | "fill";
 }) {
   // Fall back to the initial circle if the photo fails to load (a Showstart
   // avatar URL can 404), instead of showing the browser's broken-image icon.
   const [imgFailed, setImgFailed] = useState(false);
-  const dims = { width: size, height: size };
+  const fill = size === "fill";
+  const dims = fill ? {} : { width: size, height: size };
+  const fillClass = fill ? "-fill" : "";
   if (avatar && !imgFailed) {
     return (
       <img
-        className="artist-avatar"
+        className={`artist-avatar${fillClass}`}
         src={avatar}
         alt={name}
         loading="lazy"
@@ -42,8 +47,8 @@ export function ArtistAvatar({
   }
   return (
     <span
-      className="artist-initial"
-      style={{ ...dims, fontSize: Math.round(size * 0.4), background: initialColor(name) }}
+      className={`artist-initial${fillClass}`}
+      style={{ ...dims, ...(fill ? {} : { fontSize: Math.round(size * 0.4) }), background: initialColor(name) }}
       aria-hidden="true"
     >
       {avatarInitial(name)}

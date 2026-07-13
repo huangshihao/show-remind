@@ -3,10 +3,7 @@ import { initialWizard, wizardReducer, selectedArtistNames } from "./wizard-stat
 import { getConfig, resolveLink, subscribe, requestLogin, type Config } from "./api";
 import { Turnstile } from "./Turnstile";
 import { getStoredToken } from "./session";
-import { ArtistAvatar, initialColor } from "./ArtistAvatar";
-
-// Re-exported for existing importers; the source of truth now lives in ArtistAvatar.
-export { initialColor };
+import { ArtistAvatar } from "./ArtistAvatar";
 
 export function Wizard() {
   const [state, dispatch] = useReducer(wizardReducer, undefined, initialWizard);

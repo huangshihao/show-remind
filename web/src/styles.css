@@ -42,9 +42,39 @@ button.danger { background: #e03131; }
 .manual { display: flex; gap: 8px; align-items: center; }
 .manual input { flex: 1; }
 
-.artists { list-style: none; padding: 0; margin: 8px 0; }
-.manage-artist { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
-.manage-artist .artist-avatar, .manage-artist .artist-initial { flex: 0 0 auto; }
-.manage-artist-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+/* Manage page: photo-grid tiles for followed artists (fills a square cell,
+   name overlaid on a bottom gradient, small remove control in the corner). */
+.artist-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 12px; margin: 8px 0 16px; }
+.artist-tile { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden;
+  background: #f0f0f2; }
+.artist-avatar-fill, .artist-initial-fill { width: 100%; height: 100%; border-radius: 0;
+  display: block; }
+.artist-avatar-fill { object-fit: cover; }
+.artist-initial-fill { display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 32px; }
+.artist-tile-name { position: absolute; left: 0; right: 0; bottom: 0; margin: 0;
+  padding: 20px 8px 6px; background: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0));
+  color: #fff; font-size: 13px; font-weight: 600; line-height: 1.3; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artist-tile-remove { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px;
+  border-radius: 50%; border: 0; margin: 0; padding: 0; background: rgba(0,0,0,.45);
+  color: #fff; font-size: 15px; line-height: 20px; text-align: center; cursor: pointer; }
+.artist-tile-remove:hover { background: rgba(0,0,0,.7); }
+
+/* Manage page: upcoming-show cards for the followed artists. */
+.show-cards { list-style: none; padding: 0; margin: 8px 0; display: flex;
+  flex-direction: column; gap: 12px; }
+.show-card { display: flex; gap: 12px; padding: 10px; background: Canvas;
+  border: 1px solid #e4e4e7; border-radius: 14px; }
+.show-poster { width: 84px; height: 84px; flex: 0 0 auto; object-fit: cover;
+  border-radius: 10px; background: #f0f0f2; }
+.show-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.show-title { margin: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; }
-.manage-artist button { margin-top: 0; }
+.show-artists { margin: 0; color: #555; font-size: 13px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.show-meta { margin: 0; font-size: 12px; color: #888; }
+.show-link { align-self: flex-start; margin-top: 4px; font-size: 13px; color: #3b5bdb;
+  text-decoration: none; }
+.show-link:hover { text-decoration: underline; }

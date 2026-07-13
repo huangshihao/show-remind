@@ -299,15 +299,26 @@ export function transformArtistSearch(raw: any): ArtistHit[] {
 
 // Searches Showstart's artist database and picks the best match for `name`:
 // an exact normalized-name match wins; otherwise the hit with the most fans.
-// Never throws — a lookup failure just means no avatar, not a broken resolve.
+// Returns null only when the search itself succeeded but yielded no artist
+// hits — a genuine "not found". Network/parse failures are NOT swallowed
+// here; they throw, so a caller can tell "no match" apart from "couldn't
+// check" (see searchArtist below for the swallowing sibling).
+export async function searchArtistStrict(name: string): Promise<ArtistHit | null> {
+  const hits = transformArtistSearch(await client().searchUserRaw(name));
+  if (hits.length === 0) return null;
+  const target = normalizeName(name);
+  const exact = hits.find((hit) => normalizeName(hit.name) === target);
+  if (exact) return exact;
+  return hits.reduce((best, hit) => (hit.fansNum > best.fansNum ? hit : best));
+}
+
+// Same matching logic as searchArtistStrict, but never throws — a lookup
+// failure just means no avatar, not a broken resolve. Used by resolve.ts,
+// where degrading to "no avatar" on error is the desired behavior (unlike
+// manage.ts's avatar backfill, which must NOT cache an error as "no match").
 export async function searchArtist(name: string): Promise<ArtistHit | null> {
   try {
-    const hits = transformArtistSearch(await client().searchUserRaw(name));
-    if (hits.length === 0) return null;
-    const target = normalizeName(name);
-    const exact = hits.find((hit) => normalizeName(hit.name) === target);
-    if (exact) return exact;
-    return hits.reduce((best, hit) => (hit.fansNum > best.fansNum ? hit : best));
+    return await searchArtistStrict(name);
   } catch {
     return null;
   }

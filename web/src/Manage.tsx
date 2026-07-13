@@ -2,10 +2,34 @@ import { useEffect, useState } from "react";
 import { clearToken, storeToken } from "./session";
 import { ArtistAvatar } from "./ArtistAvatar";
 
+interface UpcomingShow {
+  id: string;
+  title: string;
+  poster: string | null;
+  cityCode: string;
+  venue: string | null;
+  showTime: string | null;
+  price: string | null;
+  url: string;
+  artistNames: string[];
+}
+
 interface View {
   email: string;
   cities: string[];
   artists: { id: string; name: string; avatar?: string | null }[];
+  shows: UpcomingShow[];
+}
+
+// Qiniu imageMogr2 thumbnail, same rule as the reminder email (see
+// src/mail/templates.ts posterThumb): cap width at 360px, skip if the URL
+// already carries a query string.
+function posterThumb(url: string): string {
+  return url.includes("?") ? url : `${url}?imageMogr2/thumbnail/360x/quality/85`;
+}
+
+function formatShowTime(showTime: string | null): string {
+  return showTime ? showTime.slice(0, 16).replace("T", " ") : "待定";
 }
 
 export function Manage({ token }: { token: string }) {
@@ -62,17 +86,51 @@ export function Manage({ token }: { token: string }) {
     <main className="card">
       <h1>我的关注</h1>
       <p className="sub">{view.email}</p>
-      <h3>音乐人</h3>
-      <ul className="artists">
+
+      <h3>我关注的音乐人</h3>
+      <div className="artist-photo-grid">
         {view.artists.map((a) => (
-          <li key={a.id} className="manage-artist">
-            <ArtistAvatar name={a.name} avatar={a.avatar} size={40} />
-            <span className="manage-artist-name">{a.name}</span>
-            <button className="link" onClick={() => removeArtist(a.id)}>移除</button>
-          </li>
+          <div key={a.id} className="artist-tile">
+            <button
+              type="button"
+              className="artist-tile-remove"
+              aria-label={`移除 ${a.name}`}
+              onClick={() => removeArtist(a.id)}
+            >
+              ×
+            </button>
+            <ArtistAvatar name={a.name} avatar={a.avatar} size="fill" />
+            <span className="artist-tile-name">{a.name}</span>
+          </div>
         ))}
-      </ul>
+      </div>
       <ManualAdd onAdd={addArtist} />
+
+      <h3>最近的演出</h3>
+      {view.shows.length === 0 ? (
+        <p className="sub">关注的音乐人暂时没有最近的演出</p>
+      ) : (
+        <ul className="show-cards">
+          {view.shows.map((s) => (
+            <li key={s.id} className="show-card">
+              {s.poster && (
+                <img className="show-poster" src={posterThumb(s.poster)} alt="" loading="lazy" />
+              )}
+              <div className="show-info">
+                <p className="show-title">{s.title}</p>
+                <p className="show-artists">{s.artistNames.join(" / ")}</p>
+                <p className="show-meta">时间：{formatShowTime(s.showTime)}</p>
+                <p className="show-meta">地点：{s.venue ?? "待定"}</p>
+                <p className="show-meta">票价：{s.price ?? "待定"}</p>
+                <a className="show-link" href={s.url} target="_blank" rel="noreferrer">
+                  购票/详情
+                </a>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <hr />
       <button className="danger" onClick={unsubscribe}>退订全部提醒</button>
     </main>

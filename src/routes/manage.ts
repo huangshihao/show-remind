@@ -9,46 +9,56 @@ import {
   countArtists,
 } from "../db/subscription-artists";
 import { setArtistAvatar, type ArtistRow } from "../db/artists";
-import { searchArtist } from "@/lib/sources/showstart";
+import { searchArtistStrict } from "@/lib/sources/showstart";
 import { resolvePlaylist } from "../services/resolve";
 import { validCities, MAX_ARTISTS } from "../services/limits";
 import { verifyTurnstile } from "../turnstile";
+import { findUpcomingShowsForSubscription } from "../db/my-shows";
 
 export const manageRouter = new Hono<{ Bindings: Env }>();
 
-// Cap avatar lookups per manage load to stay well under the 50-subrequest
-// budget; artists past the cap keep avatar: null and get filled on a later
-// load. See src/services/resolve.ts for the same reasoning.
-const AVATAR_LOOKUP_LIMIT = 30;
+// Cap avatar lookups per manage load: each never-searched artist costs 1
+// search + 1 write-back (~2 subrequests), on top of the getByToken +
+// listArtists reads already spent. 15 artists × 2 subrequests + overhead
+// stays well under the 50-subrequest budget; artists past the cap keep
+// avatar: null and get filled on a later load. See src/services/resolve.ts
+// for the analogous cap on the resolve path.
+const AVATAR_LOOKUP_LIMIT = 15;
 // One slow Showstart search shouldn't hang the whole manage response.
 const AVATAR_LOOKUP_TIMEOUT_MS = 4000;
 
-function searchArtistWithTimeout(name: string): Promise<Awaited<ReturnType<typeof searchArtist>>> {
+// Unlike a `Promise.race` that resolves null on timeout, this REJECTS — so a
+// timeout is indistinguishable from any other thrown error to the caller,
+// and neither gets treated as "search succeeded, no match" (see A1 below).
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timer!: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), AVATAR_LOOKUP_TIMEOUT_MS);
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error("avatar lookup timed out")), ms);
   });
-  return Promise.race([searchArtist(name), timeout]).finally(() => clearTimeout(timer));
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 // Lazily backfill avatars for artists that were never looked up (avatar === null).
 // avatar semantics: null = never searched, "" = searched but Showstart had no
 // match (don't re-search), a URL = found. Mutates rows in place; never throws.
+//
+// Critical: only a DEFINITIVE "search succeeded, no artist found" may cache
+// "". A timeout or a network/parse error must leave the row as null so it is
+// retried on the next load — caching those as "" would be indistinguishable
+// from a genuine miss and the avatar would never be found. That's why this
+// uses searchArtistStrict (throws on error) instead of searchArtist (which
+// swallows errors into null, making them look like "no match" to a caller).
 async function backfillAvatars(db: D1Database, artists: ArtistRow[]): Promise<void> {
   const pending = artists.filter((a) => a.avatar === null).slice(0, AVATAR_LOOKUP_LIMIT);
   await Promise.all(
     pending.map(async (artist) => {
       try {
-        const hit = await searchArtistWithTimeout(artist.name);
-        if (hit?.avatar) {
-          await setArtistAvatar(db, artist.id, hit.avatar);
-          artist.avatar = hit.avatar;
-        } else {
-          await setArtistAvatar(db, artist.id, ""); // mark searched-empty
-          artist.avatar = "";
-        }
+        const hit = await withTimeout(searchArtistStrict(artist.name), AVATAR_LOOKUP_TIMEOUT_MS);
+        const avatar = hit?.avatar ?? ""; // mark searched-empty when no hit or hit has no photo
+        await setArtistAvatar(db, artist.id, avatar);
+        artist.avatar = avatar;
       } catch {
-        // timeout/error → leave as-is (null), retried on a later load
+        // timeout or error: leave avatar null, retried on a later load
       }
     }),
   );
@@ -66,11 +76,13 @@ manageRouter.get("/", async (c) => {
   if (!sub) return c.notFound();
   const artists = await listArtists(c.env.DB, sub.id);
   await backfillAvatars(c.env.DB, artists);
+  const shows = await findUpcomingShowsForSubscription(c.env.DB, sub.id);
   return c.json({
     email: sub.email,
     cities: sub.cities,
     // "" (searched-empty) collapses to null so the frontend shows a placeholder.
     artists: artists.map((a) => ({ id: a.id, name: a.name, avatar: a.avatar || null })),
+    shows,
   });
 });
 

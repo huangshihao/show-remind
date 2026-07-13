@@ -5,6 +5,7 @@ import {
   transformShowDetail,
   transformArtistSearch,
   searchArtist,
+  searchArtistStrict,
   ShowstartClient,
 } from "./showstart";
 
@@ -178,5 +179,28 @@ describe("searchArtist", () => {
   it("returns null (never throws) when the underlying request fails", async () => {
     vi.spyOn(ShowstartClient.prototype, "searchUserRaw").mockRejectedValue(new Error("network down"));
     expect(await searchArtist("刺猬")).toBeNull();
+  });
+});
+
+describe("searchArtistStrict", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("matches the same result as searchArtist on success", async () => {
+    vi.spyOn(ShowstartClient.prototype, "searchUserRaw").mockResolvedValue({
+      result: [{ id: 2, name: "刺猬", avatar: "b.jpg", fansNum: 100, type: 2 }],
+    });
+    expect(await searchArtistStrict("刺猬")).toEqual({ id: 2, name: "刺猬", avatar: "b.jpg", fansNum: 100 });
+  });
+
+  it("returns null (a definitive no-match) when the search yields no hits", async () => {
+    vi.spyOn(ShowstartClient.prototype, "searchUserRaw").mockResolvedValue({ result: [] });
+    expect(await searchArtistStrict("不存在的艺人")).toBeNull();
+  });
+
+  it("THROWS (does not swallow) when the underlying request fails — the whole point of the strict variant", async () => {
+    vi.spyOn(ShowstartClient.prototype, "searchUserRaw").mockRejectedValue(new Error("network down"));
+    await expect(searchArtistStrict("刺猬")).rejects.toThrow("network down");
   });
 });

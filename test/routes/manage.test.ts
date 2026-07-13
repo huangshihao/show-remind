@@ -4,13 +4,16 @@ import { applySchema } from "../db/apply-schema";
 import { app } from "../../src/index";
 import { createPendingSubscription, activateByToken } from "../../src/db/subscriptions";
 import { setArtists, listArtists } from "../../src/db/subscription-artists";
+import { upsertShow } from "../../src/db/shows";
+import { persistMatches } from "../../src/db/show-artists";
 import * as showstart from "@/lib/sources/showstart";
 
 beforeEach(applySchema);
-// GET /api/manage lazily backfills avatars via searchArtist; default it to "no
-// match" so tests never touch the network. Individual tests override as needed.
+// GET /api/manage lazily backfills avatars via searchArtistStrict; default it
+// to "no match" so tests never touch the network. Individual tests override
+// as needed.
 beforeEach(() => {
-  vi.spyOn(showstart, "searchArtist").mockResolvedValue(null);
+  vi.spyOn(showstart, "searchArtistStrict").mockResolvedValue(null);
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -26,7 +29,7 @@ const j = (body: unknown) => ({
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
 });
 
-it("GET manage returns the subscription view", async () => {
+it("GET manage returns the subscription view, including upcoming shows", async () => {
   const sub = await activeSub();
   const res = await app.request(`/api/manage?token=${sub.token}`, {}, env);
   expect(res.status).toBe(200);
@@ -34,6 +37,34 @@ it("GET manage returns the subscription view", async () => {
   expect(body.email).toBe("a@b.com");
   expect(body.cities).toEqual(["110000"]);
   expect(body.artists.map((a: any) => a.name)).toEqual(["刺猬"]);
+  expect(body.shows).toEqual([]);
+});
+
+it("GET manage includes upcoming shows for the subscription's followed artists", async () => {
+  const sub = await activeSub();
+  const artists = await listArtists(env.DB, sub.id);
+  const show = await upsertShow(env.DB, {
+    showstartId: "900", title: "刺猬专场", cityCode: "110000", venue: "MAO",
+    showTime: "2099-08-01T20:00:00", price: "180", url: "https://x/900", performers: ["刺猬"],
+    poster: "https://s2.showstart.com/900.jpg",
+  });
+  await persistMatches(env.DB, [{ showId: show.id, artistId: artists[0].id, matchedBy: "performer" }]);
+
+  const res = await app.request(`/api/manage?token=${sub.token}`, {}, env);
+  const body = (await res.json()) as any;
+  expect(body.shows).toEqual([
+    {
+      id: show.id,
+      title: "刺猬专场",
+      poster: "https://s2.showstart.com/900.jpg",
+      cityCode: "110000",
+      venue: "MAO",
+      showTime: "2099-08-01T20:00:00",
+      price: "180",
+      url: "https://x/900",
+      artistNames: ["刺猬"],
+    },
+  ]);
 });
 
 it("GET manage backfills avatars from Showstart and caches them (no re-search)", async () => {
@@ -42,7 +73,7 @@ it("GET manage backfills avatars from Showstart and caches them (no re-search)",
   await setArtists(env.DB, sub.id, ["刺猬", "海龟先生"]);
 
   const AVATAR = "https://s2.showstart.com/img/2503.jpg";
-  const spy = vi.spyOn(showstart, "searchArtist").mockImplementation(async (name: string) =>
+  const spy = vi.spyOn(showstart, "searchArtistStrict").mockImplementation(async (name: string) =>
     name === "刺猬"
       ? { id: 2503, name: "刺猬Hedgehog", avatar: AVATAR, fansNum: 337604 }
       : null,
@@ -63,6 +94,49 @@ it("GET manage backfills avatars from Showstart and caches them (no re-search)",
   expect(second.status).toBe(200);
   expect(byName(await second.json())).toEqual({ 刺猬: AVATAR, 海龟先生: null });
   expect(spy).toHaveBeenCalledTimes(2);
+});
+
+it("a backfill timeout leaves avatar null, NOT cached as \"\" (so it's retried, not permanently marked no-match)", async () => {
+  vi.useFakeTimers();
+  const sub = await createPendingSubscription(env.DB, "timeout@b.com", ["110000"]);
+  await activateByToken(env.DB, sub.token);
+  await setArtists(env.DB, sub.id, ["慢艺人"]);
+
+  // searchArtistStrict that never resolves — simulates a hung Showstart lookup.
+  // Note: vi.spyOn on an already-mocked method (from the top-of-file
+  // beforeEach) returns the SAME spy instance, so call counts accumulate
+  // across the mockImplementation swaps below — hence the mockClear() before
+  // re-checking call counts for the second phase.
+  const spy = vi.mocked(showstart.searchArtistStrict).mockImplementation(() => new Promise(() => {}));
+
+  const resPromise = app.request(`/api/manage?token=${sub.token}`, {}, env);
+  await vi.advanceTimersByTimeAsync(4000);
+  const res = await resPromise;
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as any;
+  expect(body.artists.find((a: any) => a.name === "慢艺人").avatar).toBeNull();
+  expect(spy).toHaveBeenCalledTimes(1);
+  vi.useRealTimers();
+
+  // Prove it wasn't cached as "": a later load with a real (non-hanging)
+  // search must re-search this artist, because its avatar is still null.
+  spy.mockClear();
+  spy.mockResolvedValue(null);
+  const second = await app.request(`/api/manage?token=${sub.token}`, {}, env);
+  expect(second.status).toBe(200);
+  expect(spy).toHaveBeenCalledTimes(1);
+});
+
+it("a backfill error (not a timeout) also leaves avatar null, not cached as \"\"", async () => {
+  const sub = await createPendingSubscription(env.DB, "err@b.com", ["110000"]);
+  await activateByToken(env.DB, sub.token);
+  await setArtists(env.DB, sub.id, ["出错乐队"]);
+
+  vi.spyOn(showstart, "searchArtistStrict").mockRejectedValue(new Error("network down"));
+  const res = await app.request(`/api/manage?token=${sub.token}`, {}, env);
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as any;
+  expect(body.artists.find((a: any) => a.name === "出错乐队").avatar).toBeNull();
 });
 
 it("unknown token returns 404 everywhere", async () => {
