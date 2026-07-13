@@ -1,21 +1,33 @@
-# Scraper live smoke
+# Live source smoke
 
-Fixtures cover parsing only. These calls confirm the live upstream integrations.
-Run against a running scraper (`docker compose up scraper` or `uv run uvicorn ...`).
+Fixtures (`lib/sources/*.test.ts`, `lib/adapters/**/*.test.ts`) cover parsing only, against
+recorded responses. `scripts/smoke.ts` is the live counterpart: it calls the three real
+upstream APIs directly and confirms they still return usable data. This is how you find out
+fast when a fixture test still passes but the real API has moved.
 
-## QQ playlist (use a real public QQ Music playlist id)
-    curl -s "localhost:8001/qq/playlist/<PUBLIC_QQ_PLAYLIST_ID>" | jq '.title, (.songs | length)'
-Expect a non-empty title and songs > 0. If the qqmusic-api-python call signature
-differs from `songlist.get_detail(int(id))`, adjust `fetch_qq_playlist_raw` in
-`app/qq.py` to match the installed version, keeping the return a dict shaped like
-`tests/fixtures/qq_playlist_raw.json`.
+Run it locally:
 
-## Showstart city list (310000 = Shanghai)
-    curl -s "localhost:8001/showstart/cities/310000/shows?page=1" | jq '.shows | length'
-Expect shows > 0. A 502 or empty list means the sign algorithm or endpoint path
-changed — update `SIGN_SALT` / paths in `app/showstart.py`, re-record fixtures
-if the response shape moved, and re-run `pytest`.
+    npx tsx scripts/smoke.ts
 
-## Showstart detail
-    curl -s "localhost:8001/showstart/shows/<activityId from the list>" | jq '.performers'
-Expect a non-empty performers array.
+It checks:
+
+- **NetEase** — resolves a public plaintext playlist (`resolveNeteasePlaylist` in
+  `lib/adapters/netease`) and expects a non-empty song list.
+- **QQ Music** — fetches a public playlist (`fetchQqPlaylist` in `lib/sources/qq`) and expects
+  a non-empty song list. Override the playlist id with `SMOKE_QQ_PLAYLIST` if the default one
+  disappears.
+- **Showstart** — fetches the Shanghai city show list (`fetchCityShows` in
+  `lib/sources/showstart`) and then the detail of the first show (`fetchShowDetail`), expecting
+  at least one show and a non-empty performers array.
+
+Each check prints a `✓ <name>: ...` line on success or a `✗ <name>: <error>` line on failure.
+The script exits non-zero if any of the three checks fails.
+
+A GitHub Actions workflow (`.github/workflows/smoke.yml`) runs this daily and on
+`workflow_dispatch`. On failure it opens (or comments on an existing) `smoke-failure`-labelled
+issue so a broken upstream integration gets noticed without anyone needing to watch the badge
+in `README.md`.
+
+If a check fails, start by reading `docs/showstart-reverse-engineering.md` (for Showstart) or
+the relevant client in `lib/sources/` / `lib/adapters/`, update the code to match the upstream's
+current behavior, and refresh the fixture(s) it broke.
