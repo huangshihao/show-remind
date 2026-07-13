@@ -20,11 +20,14 @@
     }
   ],
   "triggers": { "crons": ["0 2,12 * * *"] },
+  // Custom domain. Wrangler provisions the DNS record + TLS certificate for this
+  // hostname on deploy (the zone must be in this Cloudflare account). The Worker
+  // also stays reachable at its <name>.<subdomain>.workers.dev URL.
+  "routes": [{ "pattern": "show.build4funhsh.cc", "custom_domain": true }],
   "vars": {
-    // Your deployed Worker URL (used in confirm/manage/unsubscribe links in emails).
-    // Set this to the real https://<name>.<subdomain>.workers.dev or custom domain
-    // after your first deploy.
-    "APP_BASE_URL": "https://show-remind.horacewomw.workers.dev",
+    // Base URL used in confirm/manage/unsubscribe links in emails — must match the
+    // custom domain above so the magic links point at the right host.
+    "APP_BASE_URL": "https://show.build4funhsh.cc",
     // Verified sender address for outgoing mail (must be verified with your mail
     // provider, e.g. a Resend domain/sender).
     "MAIL_FROM": "Show Remind <notify@example.com>",
