@@ -35,14 +35,13 @@ export default defineConfig({
     }),
   ],
   test: {
-    // Scoped to `test/**` only: the pre-existing `lib/**/*.test.ts` suite
-    // (netease/qq/matcher/etc.) was written for the old Node+Prisma vitest
-    // setup (path alias `@/*`, `lib/db` Prisma client) and is not compatible
-    // with the workers-pool sandbox as-is (12 of 24 files fail with
-    // "Cannot find package '@/lib/db'" — no `@` alias is configured here,
-    // and some of those modules depend on Node/Prisma APIs unavailable in
-    // the Workers runtime). Reconciling that suite with this pool is a later
-    // task's job (see task-2-report.md).
-    include: ["test/**/*.test.ts"],
+    // Server + pure-lib tests run in the workers pool. `test/**` covers the
+    // Worker routes/pipeline/db; `lib/**` covers the reverse-engineered
+    // source/adapter fixture tests (netease/qq/showstart/matcher) — these are
+    // the early-warning guard for upstream API drift, so they must run under
+    // `pnpm test`. (The old Prisma-dependent lib tests that couldn't run here
+    // were deleted with the rest of the Prisma stack in the cleanup task.)
+    // The React SPA tests run separately under vitest.web.config.ts (happy-dom).
+    include: ["test/**/*.test.ts", "lib/**/*.test.ts"],
   },
 });
