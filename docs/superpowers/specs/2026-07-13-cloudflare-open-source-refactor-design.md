@@ -68,7 +68,7 @@ notifications         subscription_id + show_id UNIQUE, status TEXT(pending|sent
 
 ### 4.1 订阅向导（首页单页完成）
 
-1. 粘贴网易云/QQ 公开歌单链接 → `POST /api/resolve` → 服务端解析返回艺人清单（名字 + 歌数，沿用现有 tally 逻辑）。
+1. 粘贴 QQ 公开歌单链接 → `POST /api/resolve` → 服务端解析返回艺人清单（名字 + 歌数，沿用现有 tally 逻辑）。网易云入口保留但标注"暂不可用"（spike 实测网易对 CF 出口 IP 软封，见第 6 节；`lib/adapters/netease` 代码保留，一旦解封或有国内中继即可恢复）。
 2. 勾选艺人；**始终提供手动添加艺人输入框**（既是补充，也是歌单解析被封时的完整兜底路径——用户可跳过粘贴歌单）。
 3. 选城市（1-N，沿用现有城市码表）。
 4. 填邮箱 + Turnstile → `POST /api/subscribe` → 建 pending 订阅 → 发确认邮件。
@@ -98,10 +98,12 @@ cron 触发
 
 ## 6. 爬虫可用性策略
 
-1. **Phase 0 spike（任何业务代码之前）**：部署几十行探针 Worker，从 CF 出口 IP 实测三个 API + node:crypto。
-   - 全通 → 按本设计直走。
-   - 网易不通 → 歌单解析仅保留 QQ + 手动输入，向导中网易入口标注"暂不可用"。
-   - 秀动不通 → 爬取层退到 GitHub Actions（同一份 TS 代码跑在 Node，经 D1 REST API 写库），其余架构不变。源码层"纯函数 + 注入 fetch"保证此切换是配置级的。
+1. **Phase 0 spike —— 已完成（2026-07-13，探针代码在 `spike/`）**。从 Cloudflare 出口（新加坡，AS13335）实测，本机国内 IP 作对照基线（基线全通）：
+   - **秀动 wap v3：✅ 通**（列表 + 详情 + guest token 全链路正常）→ 爬取层按本设计留在 Worker cron。
+   - **QQ musicu：✅ 通**（签名被接受，歌单解析正常）。
+   - **网易 weapi：❌ 软封**——HTTP 200 但 body 为空（bodyLen=0），同一代码从国内 IP 返回完整数据。触发预案：歌单解析仅保留 QQ + 手动输入，向导中网易入口标注"暂不可用"并引导到这两条路径。此封锁对所有部署在 CF 上的实例生效（含自部署者）。
+   - **node:crypto：✅**（md5/sha1/aes-128-cbc/randomBytes 在 `nodejs_compat` 下全部可用）。
+   - 附带观察：偶发 Cloudflare 边缘瞬时错误（如 1042），重试即恢复 → resolve 接口对上游空响应/瞬时错误返回可重试的错误码，前端提供"重试"。
 2. **每日活体冒烟**：GHA 每日跑三个 source 的真实 API 冒烟（自动化 `docs/scraper-smoke.md`），失败自动开 GitHub Issue；README 挂状态 badge，作为公开健康看板。
 3. **运行时告警**：移植现有 `admin-alert`——管道连续全城市失败时邮件通知部署者，阈值沿用现有 `lib/notifier/admin-alert.ts` 的逻辑。
 4. **隔离与文档**：每源独立模块 + fixture 测试 + 逆向文档（`docs/showstart-reverse-engineering.md`），坏了只修一个文件。
@@ -127,7 +129,7 @@ cron 触发
 
 ## 10. 实施顺序（供 writing-plans 参考）
 
-1. Phase 0 spike：探针 Worker 验证三 API 可达性 + node:crypto → **结果决定是否触发第 6 节预案，回到本文档修订后再继续**。
+1. ~~Phase 0 spike~~ **已完成**，结果见第 6 节：秀动/QQ 通，网易软封（预案已并入设计）。
 2. Worker 骨架：Hono + D1 schema + wrangler 配置 + vitest-pool-workers。
 3. lib 迁移：sources/adapters/matcher + 新 repository 层。
 4. 订阅 API + 邮件 provider + 确认/管理流。
