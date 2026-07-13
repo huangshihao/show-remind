@@ -2,7 +2,9 @@ import { expect, it, vi } from "vitest";
 import { resendProvider, consoleProvider } from "../../src/mail/provider";
 
 it("resendProvider POSTs to Resend with auth + payload", async () => {
-  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: "x" }), { status: 200 }));
+  const fetchMock = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) =>
+    new Response(JSON.stringify({ id: "x" }), { status: 200 }),
+  );
   vi.stubGlobal("fetch", fetchMock);
   const p = resendProvider("re_key", "Show <n@d.com>");
   await p.send({ to: "u@d.com", subject: "hi", html: "<b>hi</b>" });
