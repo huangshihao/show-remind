@@ -17,4 +17,5 @@ export async function applySchema(): Promise<void> {
   for (const stmt of statements) {
     await env.DB.prepare(stmt).run();
   }
+  await env.DB.prepare("PRAGMA foreign_keys = ON").run();
 }
