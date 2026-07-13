@@ -28,6 +28,7 @@ export default defineConfig({
           MAIL_FROM: "Show <n@test.local>",
           ADMIN_EMAIL: "admin@test.local",
           TURNSTILE_SECRET: "test-turnstile",
+          TURNSTILE_SITE_KEY: "",
           PUBLIC_MODE: "0",
         },
       },

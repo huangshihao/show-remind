@@ -58,3 +58,8 @@ CREATE TABLE IF NOT EXISTS notifications (
   FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
   FOREIGN KEY (show_id) REFERENCES shows(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);

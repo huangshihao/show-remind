@@ -18,6 +18,7 @@ export async function applySchema(): Promise<void> {
     "shows",
     "artists",
     "subscriptions",
+    "meta",
   ];
   for (const table of tableOrder) {
     await env.DB.prepare(`DROP TABLE IF EXISTS ${table}`).run();

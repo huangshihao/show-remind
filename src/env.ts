@@ -7,5 +7,6 @@ export interface Env {
   MAIL_FROM: string;
   ADMIN_EMAIL: string;
   TURNSTILE_SECRET: string;
+  TURNSTILE_SITE_KEY: string;
   PUBLIC_MODE: string; // "1" enables Turnstile + limits; "0" for self-host
 }

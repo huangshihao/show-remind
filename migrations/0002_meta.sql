@@ -1,0 +1,6 @@
+-- Migration number: 0002 	 2026-07-13T09:03:01.406Z
+
+CREATE TABLE IF NOT EXISTS meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
