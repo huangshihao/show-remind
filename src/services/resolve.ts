@@ -10,18 +10,22 @@ async function resolveQq(externalId: string): Promise<ResolvedPlaylist> {
   return { platform: "qq", externalId, title, songs };
 }
 
-// Workers caps a single invocation at 50 subrequests. Only the top-ranked
-// artists (tally is sorted by songCount desc) get an avatar lookup; the rest
-// keep avatar: undefined rather than risk exhausting the subrequest budget.
-const AVATAR_LOOKUP_LIMIT = 40;
+// Workers caps a single invocation at 50 subrequests, and the playlist fetch
+// itself already spends some of that budget (QQ pagination alone can run up
+// to MAX_PAGES=60 requests for a huge list; a large Netease playlist is
+// ~1+ceil(N/500)). So avatar lookups are capped well under 50 — any artist
+// past the cap, or whose lookup fails or times out, simply keeps
+// avatar: null. That's graceful degradation, never a resolve failure.
+const AVATAR_LOOKUP_LIMIT = 30;
 // One slow Showstart search shouldn't hang the whole resolve response.
 const AVATAR_LOOKUP_TIMEOUT_MS = 4000;
 
 function searchArtistWithTimeout(name: string): Promise<Awaited<ReturnType<typeof searchArtist>>> {
-  return Promise.race([
-    searchArtist(name),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), AVATAR_LOOKUP_TIMEOUT_MS)),
-  ]);
+  let timer!: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), AVATAR_LOOKUP_TIMEOUT_MS);
+  });
+  return Promise.race([searchArtist(name), timeout]).finally(() => clearTimeout(timer));
 }
 
 async function attachAvatars(artists: ArtistTally[]): Promise<ArtistTally[]> {

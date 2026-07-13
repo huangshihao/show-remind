@@ -76,6 +76,7 @@ export interface ShowDetail {
 export class ShowstartClient {
   private deviceNo = crypto.randomBytes(16).toString("hex"); // 32 hex, stable per client
   private accessToken = "";
+  private tokenPromise: Promise<void> | null = null;
 
   private sign(body: string, urlPath: string, trace: string): string {
     // accessToken + sign + idToken + userId + "wap" + deviceNo + body + urlPath + "997" + CSAPPID + traceId
@@ -123,13 +124,26 @@ export class ShowstartClient {
     return resp.json();
   }
 
-  private async fetchToken(): Promise<void> {
+  private async doFetchToken(): Promise<void> {
     const data = await this.callRaw("GET", "/waf/gettoken", "");
     const token = data?.result?.accessToken?.access_token;
     if (!token) {
       throw new Error(`showstart gettoken failed: state=${data?.state} msg=${data?.msg}`);
     }
     this.accessToken = token;
+  }
+
+  // Single-flight guard: concurrent callers (e.g. up to 40 parallel avatar
+  // lookups in resolve.ts) that all see a missing/stale token must share ONE
+  // /waf/gettoken request, not fire one each (thundering herd on the 50
+  // Workers subrequest budget, and bot-like to Showstart's WAF).
+  private fetchToken(): Promise<void> {
+    if (!this.tokenPromise) {
+      this.tokenPromise = this.doFetchToken().finally(() => {
+        this.tokenPromise = null;
+      });
+    }
+    return this.tokenPromise;
   }
 
   private async request(method: "GET" | "POST", urlPath: string, body = ""): Promise<any> {

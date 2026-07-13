@@ -315,6 +315,39 @@ def performers(detail_result: dict) -> list[str]:
 
 ---
 
+## 11. 艺人搜索接口 —— 拿 avatar（已验证）
+
+```
+POST https://wap.showstart.com/v3/app/user/search
+```
+
+请求 body：
+
+```json
+{"keyword":"刺猬","pageNo":1,"pageSize":5}
+```
+
+- `keyword`：艺人/用户名，模糊匹配。
+- `pageNo`/`pageSize`：翻页参数；单个艺人查找用第一页、小 pageSize（当前实现 `pageSize:5`）就够。
+
+响应 `result` 是数组（不是 `result.xxx` 包一层），每条：
+
+```json
+{
+  "id": 2503,
+  "name": "刺猬Hedgehog",
+  "avatar": "https://s2.showstart.com/img/2503.jpg",
+  "fansNum": 337604,
+  "type": 2
+}
+```
+
+- `type === 2`（部分响应用 `userType === 2`）才是**艺人/乐队**；其他 type（例如场地、普通用户）要过滤掉。
+- 多个艺人命中时的选取策略：先找 `name` 归一化后与查询词精确相等的一条；没有精确匹配就取 `fansNum` 最大的一条（`lib/sources/showstart.ts` 的 `searchArtist`）。
+- 用途：给 `resolve` 接口里 tally 出来的每个艺人补 `avatar`；查询失败/超时只影响这一个艺人的 avatar（`null`），不影响整个 resolve 请求。
+
+---
+
 ## 附：QQ 音乐（已改代码并提交，非本文档待办）
 
 QQ 那条线已经在分支 `fix/live-integrations` 修好并提交（commit `353fb55`），供参考：

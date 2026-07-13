@@ -60,6 +60,45 @@ it("resolves a QQ link to a tallied artist list with avatars attached", async ()
   vi.unstubAllGlobals();
 });
 
+it("times out a slow avatar lookup instead of hanging, leaving avatar: null", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          request: {
+            code: 0,
+            data: {
+              dirinfo: { title: "Slow List" },
+              songlist_size: 1,
+              songlist: [{ name: "s1", singer: [{ name: "慢艺人" }] }],
+            },
+          },
+        }),
+      ),
+    ),
+  );
+  // searchArtist that never resolves — simulates a hung/slow Showstart lookup.
+  vi.spyOn(showstart, "searchArtist").mockImplementation(() => new Promise(() => {}));
+  const resPromise = app.request(
+    "/api/resolve",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ link: "https://y.qq.com/n/ryqq/playlist/12345" }),
+    },
+    env,
+  );
+  await vi.advanceTimersByTimeAsync(4000);
+  const res = await resPromise;
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as any;
+  expect(body.artists[0]).toEqual({ name: "慢艺人", songCount: 1, avatar: null });
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
 it("returns 400 with a readable message on an unrecognized link", async () => {
   const res = await app.request(
     "/api/resolve",
