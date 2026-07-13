@@ -596,9 +596,11 @@ it("inserts a new artist and is idempotent on normalized name", async () => {
   expect((await getAllArtists(db())).length).toBe(1);
 });
 
-it("treats case/space variants as the same artist", async () => {
-  const a = await upsertArtist(db(), "Re-TROS");
-  const b = await upsertArtist(db(), "re tros");
+it("treats case/whitespace variants as the same artist", async () => {
+  // normalizeName lowercases + collapses whitespace (it does NOT strip
+  // hyphens), so these two spellings normalize to the same key.
+  const a = await upsertArtist(db(), "Re TROS");
+  const b = await upsertArtist(db(), "re   tros");
   expect(b.id).toBe(a.id);
 });
 ```
