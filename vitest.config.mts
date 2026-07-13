@@ -18,6 +18,18 @@ export default defineConfig({
       miniflare: {
         // apply schema to the isolated test D1 before each file
         d1Databases: { DB: "show-remind" },
+        // vars/secrets the Worker's Env expects (src/env.ts) — populated here
+        // so routes that read c.env.* (turnstile, mail, limits, PUBLIC_MODE
+        // gating) have stable values under test.
+        bindings: {
+          APP_BASE_URL: "https://test.local",
+          INTERNAL_SECRET: "test-internal",
+          RESEND_API_KEY: "",
+          MAIL_FROM: "Show <n@test.local>",
+          ADMIN_EMAIL: "admin@test.local",
+          TURNSTILE_SECRET: "test-turnstile",
+          PUBLIC_MODE: "0",
+        },
       },
     }),
   ],
