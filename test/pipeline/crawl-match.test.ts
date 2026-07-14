@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
 import { applySchema } from "../db/apply-schema";
-import { crawlCity } from "../../src/pipeline/crawl";
+import { crawlCity, MAX_DETAILS_PER_RUN } from "../../src/pipeline/crawl";
 import { matchNewShows, matchArtistsToExistingShows } from "../../src/pipeline/match";
 import { upsertArtist } from "../../src/db/artists";
 import { getShowsByIds, upsertShow } from "../../src/db/shows";
@@ -54,6 +54,21 @@ it("crawlCity paginates until an empty page", async () => {
   expect(ids.length).toBe(3); // 2 from page 1 + 1 from page 2
   vi.restoreAllMocks();
 });
+
+it("crawlCity enriches at most MAX_DETAILS_PER_RUN new shows per run", async () => {
+  const many = Array.from({ length: MAX_DETAILS_PER_RUN + 4 }, (_, i) => ({
+    showstartId: `s${i}`, title: `t${i}`, cityCode: "110000", showTime: null, url: `u${i}`, poster: null,
+  }));
+  mockCityPages(many);
+  const detailSpy = vi.spyOn(showstart, "fetchShowDetail").mockImplementation(async (id: string) => ({
+    showstartId: id, title: `t${id}`, cityCode: "110000", venue: null,
+    showTime: null, price: null, url: `u${id}`, performers: [], poster: null,
+  }));
+  const ids = await crawlCity(env.DB, "110000");
+  expect(ids.length).toBe(MAX_DETAILS_PER_RUN);
+  expect(detailSpy).toHaveBeenCalledTimes(MAX_DETAILS_PER_RUN);
+  vi.restoreAllMocks();
+}, 20000); // crawlCity really sleeps ~1s between each detail fetch
 
 it("crawlCity falls back to the crawled city when the detail response has no city", async () => {
   mockCityPages([{ showstartId: "7", title: "x", cityCode: "110000", showTime: null, url: "u7", poster: null }]);
