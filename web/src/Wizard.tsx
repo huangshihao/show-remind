@@ -2,7 +2,6 @@ import { useEffect, useReducer, useState } from "react";
 import { initialWizard, wizardReducer, selectedArtistNames } from "./wizard-state";
 import { getConfig, resolveLink, subscribe, requestLogin, type Config } from "./api";
 import { Turnstile } from "./Turnstile";
-import { getStoredToken } from "./session";
 import { ArtistAvatar } from "./ArtistAvatar";
 import { Shell } from "./Shell";
 
@@ -80,12 +79,6 @@ export function Wizard() {
             粘贴一份歌单，挑出你想追的音乐人，留个邮箱。他们在你的城市开演出时，你会先知道。
           </p>
 
-          {getStoredToken() && (
-            <p className="login-row rise rise-1">
-              <a className="btn-ghost" href="/manage">进入我的关注 →</a>
-            </p>
-          )}
-
           {error && <p className="error">{error}</p>}
 
           <div className="hero-card rise rise-1">
@@ -117,7 +110,7 @@ export function Wizard() {
             </button>
           </p>
 
-          {!getStoredToken() && <LoginEntry config={config} />}
+          <LoginEntry config={config} />
         </section>
       )}
 

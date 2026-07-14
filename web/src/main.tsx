@@ -6,13 +6,12 @@ import { getStoredToken } from "./session";
 import "./styles.css";
 
 function Root() {
-  const path = window.location.pathname;
   const urlToken = new URLSearchParams(window.location.search).get("token") ?? "";
-  if (path.startsWith("/manage")) {
-    const token = urlToken || getStoredToken() || "";
-    if (token) return <Manage token={token} />;
-    return <Wizard />;
-  }
+  const token = urlToken || getStoredToken() || "";
+  // A logged-in visitor (magic-link token in the URL, or one remembered from a
+  // previous visit) lands on their dashboard — including at the root "/", not
+  // just /manage — instead of the subscribe wizard. No token → the wizard.
+  if (token) return <Manage token={token} />;
   return <Wizard />;
 }
 
