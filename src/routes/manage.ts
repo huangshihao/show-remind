@@ -3,11 +3,11 @@ import type { Env } from "../env";
 import { getByToken, setCities, deleteByToken, type SubscriptionRow } from "../db/subscriptions";
 import {
   listArtists,
-  addArtistToSubscription,
   addArtistReturningInserted,
   removeArtist,
   countArtists,
 } from "../db/subscription-artists";
+import { matchArtistsToExistingShows } from "../pipeline/match";
 import { setArtistAvatar, type ArtistRow } from "../db/artists";
 import { searchArtistStrict } from "@/lib/sources/showstart";
 import { resolvePlaylist } from "../services/resolve";
@@ -104,8 +104,9 @@ manageRouter.post("/artists", async (c) => {
   if (c.env.PUBLIC_MODE === "1" && (await countArtists(c.env.DB, sub.id)) >= MAX_ARTISTS) {
     return c.json({ error: `最多关注 ${MAX_ARTISTS} 位` }, 400);
   }
-  const id = await addArtistToSubscription(c.env.DB, sub.id, clean);
-  return c.json({ id });
+  const { artistId, inserted } = await addArtistReturningInserted(c.env.DB, sub.id, clean);
+  if (inserted) await matchArtistsToExistingShows(c.env.DB, [artistId]);
+  return c.json({ id: artistId });
 });
 
 manageRouter.delete("/artists/:artistId", async (c) => {
@@ -137,11 +138,16 @@ manageRouter.post("/import", async (c) => {
   }
   const cap = MAX_ARTISTS - (await countArtists(c.env.DB, sub.id));
   let added = 0;
+  const newArtistIds: string[] = [];
   for (const a of resolved.artists) {
     if (added >= cap) break;
-    const { inserted } = await addArtistReturningInserted(c.env.DB, sub.id, a.name);
-    if (inserted) added++;
+    const { artistId, inserted } = await addArtistReturningInserted(c.env.DB, sub.id, a.name);
+    if (inserted) {
+      added++;
+      newArtistIds.push(artistId);
+    }
   }
+  await matchArtistsToExistingShows(c.env.DB, newArtistIds);
   const artists = await listArtists(c.env.DB, sub.id);
   return c.json({ added, artists: artists.map((x) => ({ id: x.id, name: x.name })) });
 });

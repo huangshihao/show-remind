@@ -154,6 +154,19 @@ it("add and remove artists", async () => {
   expect((await listArtists(env.DB, sub.id)).map((a) => a.name)).toEqual(["刺猬"]);
 });
 
+it("adding an artist links it to already-crawled upcoming shows", async () => {
+  const sub = await activeSub();
+  const show = await upsertShow(env.DB, {
+    showstartId: "901", title: "海龟先生巡演", cityCode: "110000", venue: "MAO",
+    showTime: "2099-09-01T20:00:00", price: "200", url: "https://x/901", performers: ["海龟先生"],
+    poster: null,
+  });
+  await app.request(`/api/manage/artists?token=${sub.token}`, j({ name: "海龟先生" }), env);
+  const res = await app.request(`/api/manage?token=${sub.token}`, {}, env);
+  const body = (await res.json()) as any;
+  expect(body.shows.map((s: any) => s.id)).toEqual([show.id]);
+});
+
 it("update cities validates the set", async () => {
   const sub = await activeSub();
   expect((await app.request(`/api/manage/cities?token=${sub.token}`, j({ cities: ["310000"] }), env)).status).toBe(200);

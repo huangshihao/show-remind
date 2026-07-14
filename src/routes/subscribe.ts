@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
 import { createPendingSubscription, getByEmail } from "../db/subscriptions";
-import { setArtists } from "../db/subscription-artists";
+import { addArtistReturningInserted, countArtists } from "../db/subscription-artists";
+import { matchArtistsToExistingShows } from "../pipeline/match";
 import { getMailProvider } from "../mail/provider";
 import { confirmEmail } from "../mail/templates";
 import { validCities, isEmail, MAX_ARTISTS } from "../services/limits";
@@ -49,7 +50,19 @@ subscribeRouter.post("/", async (c) => {
   }
 
   const sub = await createPendingSubscription(c.env.DB, email, cities);
-  await setArtists(c.env.DB, sub.id, artists.slice(0, MAX_ARTISTS));
+  // Merge into any existing list (a pending sub may already hold an earlier
+  // playlist import) — replacing wholesale would silently wipe it.
+  let room = MAX_ARTISTS - (await countArtists(c.env.DB, sub.id));
+  const newArtistIds: string[] = [];
+  for (const name of artists) {
+    if (room <= 0) break;
+    const { artistId, inserted } = await addArtistReturningInserted(c.env.DB, sub.id, name);
+    if (inserted) {
+      newArtistIds.push(artistId);
+      room--;
+    }
+  }
+  await matchArtistsToExistingShows(c.env.DB, newArtistIds);
   const { subject, html } = confirmEmail(c.env.APP_BASE_URL, sub.token);
   await mail.send({ to: email, subject, html });
 

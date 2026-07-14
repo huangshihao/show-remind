@@ -86,6 +86,11 @@ export async function upsertShow(db: D1Database, s: ShowInput): Promise<ShowRow>
   return { ...s, id };
 }
 
+export async function getAllShows(db: D1Database): Promise<ShowRow[]> {
+  const { results } = await db.prepare("SELECT * FROM shows").all<RawRow>();
+  return results.map(toRow);
+}
+
 export async function getShowsByIds(db: D1Database, ids: string[]): Promise<ShowRow[]> {
   if (ids.length === 0) return [];
   const placeholders = ids.map(() => "?").join(",");

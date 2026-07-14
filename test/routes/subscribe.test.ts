@@ -4,6 +4,8 @@ import { applySchema } from "../db/apply-schema";
 import { app } from "../../src/index";
 import { getByEmail } from "../../src/db/subscriptions";
 import { listArtists } from "../../src/db/subscription-artists";
+import { upsertShow } from "../../src/db/shows";
+import { findUpcomingShowsForSubscription } from "../../src/db/my-shows";
 
 beforeEach(applySchema);
 
@@ -41,6 +43,27 @@ it("confirm activates the sub and redirects to manage", async () => {
 it("confirm with unknown token returns 404", async () => {
   const res = await app.request("/api/confirm?token=nope", {}, env);
   expect(res.status).toBe(404);
+});
+
+it("re-subscribing a PENDING email merges artists instead of wiping the earlier list", async () => {
+  await subscribe({ email: "a@b.com", cities: ["110000"], artists: ["刺猬", "海龟先生"] });
+  const res = await subscribe({ email: "a@b.com", cities: ["110000"], artists: ["达达"] });
+  expect(res.status).toBe(200);
+  const sub = await getByEmail(env.DB, "a@b.com");
+  const names = (await listArtists(env.DB, sub!.id)).map((a) => a.name).sort();
+  expect(names).toEqual(["刺猬", "海龟先生", "达达"].sort());
+});
+
+it("subscribing links the new artists to already-crawled upcoming shows", async () => {
+  const show = await upsertShow(env.DB, {
+    showstartId: "800", title: "刺猬夏日专场", cityCode: "110000", venue: "MAO",
+    showTime: "2099-08-01T20:00:00", price: "180", url: "https://x/800", performers: ["刺猬"],
+    poster: null,
+  });
+  await subscribe({ email: "a@b.com", cities: ["110000"], artists: ["刺猬"] });
+  const sub = await getByEmail(env.DB, "a@b.com");
+  const shows = await findUpcomingShowsForSubscription(env.DB, sub!.id);
+  expect(shows.map((s) => s.id)).toEqual([show.id]);
 });
 
 it("re-subscribing an ACTIVE email does not clobber its artists/status", async () => {

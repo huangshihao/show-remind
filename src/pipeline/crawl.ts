@@ -11,7 +11,10 @@ export async function crawlCity(db: D1Database, cityCode: string): Promise<strin
   for (const showstartId of newIds) {
     await sleep(jitter());
     const detail = await fetchShowDetail(showstartId);
-    const saved = await upsertShow(db, detail);
+    // Showstart's detail API omits cityId (detail.cityCode comes back "");
+    // fall back to the city this crawl was asked for, or the manage/notify
+    // city filter would drop the show forever.
+    const saved = await upsertShow(db, { ...detail, cityCode: detail.cityCode || cityCode });
     savedIds.push(saved.id);
   }
   return savedIds;
