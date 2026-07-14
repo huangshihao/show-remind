@@ -1,80 +1,620 @@
-:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-body { margin: 0; background: #f6f6f7; }
-.card { max-width: 560px; margin: 5vh auto; padding: 24px; background: Canvas;
-  border-radius: 16px; box-shadow: 0 2px 20px rgba(0,0,0,.08); }
-h1 { margin: 0 0 4px; }
-.sub { color: #888; margin-top: 0; }
-label { display: block; margin: 16px 0 6px; font-weight: 600; }
-input[type=text], input[type=email], input:not([type]) { width: 100%; padding: 10px;
-  border: 1px solid #ccc; border-radius: 10px; box-sizing: border-box; }
-button { margin-top: 16px; padding: 10px 18px; border: 0; border-radius: 10px;
-  background: #3b5bdb; color: #fff; font-size: 15px; cursor: pointer; }
-button:disabled { opacity: .5; cursor: not-allowed; }
-button.link { background: none; color: #3b5bdb; padding: 6px; }
-button.danger { background: #e03131; }
-.cities { list-style: none; padding: 0; display: grid; gap: 8px; }
-.cities { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
-.cities label { font-weight: 400; margin: 0; }
-.count { color: #aaa; }
+/* ============================================================================
+   Showlist — gig-flyer / ticket-stub aesthetic.
+   Warm paper + ink + one acid-lime accent. Mobile-first, edge-to-edge.
+   No web fonts (mainland-China audience): character comes from color, weight,
+   layout and motion, not from an exotic Latin face that wouldn't render CJK.
+   ========================================================================== */
 
-.artist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: 12px; margin: 8px 0 4px; }
-.artist-card { display: flex; flex-direction: column; align-items: center; gap: 6px;
-  padding: 12px 8px; margin: 0; background: Canvas; border: 1px solid #e4e4e7;
-  border-radius: 14px; cursor: pointer; color: inherit; font: inherit; text-align: center;
-  transition: border-color .12s, background .12s, box-shadow .12s; }
-.artist-card:hover { border-color: #c7c7cc; }
-.artist-card.selected { border-color: #3b5bdb; background: #eef2ff;
-  box-shadow: 0 0 0 2px rgba(59,91,219,.25); }
-.artist-avatar-wrap { position: relative; width: 60px; height: 60px; }
-.artist-avatar, .artist-initial { width: 60px; height: 60px; border-radius: 50%;
-  display: block; }
-.artist-avatar { object-fit: cover; background: #f0f0f2; }
-.artist-initial { display: flex; align-items: center; justify-content: center;
-  color: #fff; font-weight: 700; font-size: 24px; }
-.artist-check { position: absolute; right: -2px; bottom: -2px; width: 20px; height: 20px;
-  border-radius: 50%; background: #3b5bdb; color: #fff; font-size: 12px; line-height: 20px;
-  text-align: center; border: 2px solid Canvas; }
-.artist-name { font-size: 13px; line-height: 1.25; max-width: 100%; overflow: hidden;
-  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
-.artist-card .count { font-size: 11px; }
-.err { color: #e03131; }
-.manual { display: flex; gap: 8px; align-items: center; }
-.manual input { flex: 1; }
+:root {
+  color-scheme: light dark;
 
-/* Manage page: photo-grid tiles for followed artists (fills a square cell,
-   name overlaid on a bottom gradient, small remove control in the corner). */
-.artist-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-  gap: 12px; margin: 8px 0 16px; }
-.artist-tile { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden;
-  background: #f0f0f2; }
-.artist-avatar-fill, .artist-initial-fill { width: 100%; height: 100%; border-radius: 0;
-  display: block; }
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif;
+  --font-ticket: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", monospace;
+
+  /* Warm-paper light theme (default). Neutrals tinted toward the accent hue. */
+  --bg: #efece1;
+  --bg-2: #e7e3d5;
+  --surface: #fbfaf5;
+  --ink: #16161a;
+  --ink-soft: #55554d;
+  --ink-faint: #8f8e83;
+  --line: #ded9c9;
+  --line-strong: #16161a;
+
+  --acid: #c2f23c;          /* electric lime — the one screaming color */
+  --acid-deep: #a6d820;
+  --acid-ink: #1a1e08;      /* text that sits on acid */
+  --coral: #ff5436;         /* CTAs / destructive energy */
+  --coral-ink: #fff3f0;
+
+  --radius: 14px;
+  --radius-lg: 22px;
+  --shadow-pop: 4px 4px 0 var(--line-strong);
+  --shadow-soft: 0 10px 30px -12px rgba(20, 20, 26, 0.35);
+
+  --ease: cubic-bezier(0.2, 0.9, 0.25, 1);
+  --shell: 620px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101014;
+    --bg-2: #17171d;
+    --surface: #1c1c23;
+    --ink: #f1eee3;
+    --ink-soft: #b0afa4;
+    --ink-faint: #78776d;
+    --line: #2c2c35;
+    --line-strong: #3a3a45;
+    --acid: #c8f748;
+    --acid-deep: #a6d820;
+    --acid-ink: #14180a;
+    --coral: #ff6347;
+    --shadow-pop: 4px 4px 0 #000;
+    --shadow-soft: 0 14px 40px -16px rgba(0, 0, 0, 0.7);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background: var(--bg);
+  /* faint dotted "flyer wall" texture */
+  background-image: radial-gradient(var(--line) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  line-height: 1.5;
+}
+
+::selection { background: var(--acid); color: var(--acid-ink); }
+
+a { color: inherit; }
+
+/* ---- App shell ----------------------------------------------------------- */
+
+.shell {
+  max-width: var(--shell);
+  margin: 0 auto;
+  min-height: 100dvh;
+  padding: 0 clamp(16px, 5vw, 28px) calc(40px + env(safe-area-inset-bottom));
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 0 14px;
+  margin-bottom: 4px;
+  background: color-mix(in oklab, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1.5px solid var(--line);
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+  color: var(--ink);
+}
+.wordmark b {
+  background: var(--acid);
+  color: var(--acid-ink);
+  padding: 1px 7px;
+  border-radius: 7px;
+  transform: rotate(-3deg);
+  font-weight: 900;
+}
+.topbar .tag {
+  font-family: var(--font-ticket);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+
+/* ---- Type helpers --------------------------------------------------------- */
+
+.eyebrow {
+  font-family: var(--font-ticket);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin: 0 0 10px;
+}
+
+h1.display {
+  font-size: clamp(2.1rem, 9vw, 3.1rem);
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  font-weight: 850;
+  margin: 0 0 14px;
+}
+h1.display em {
+  font-style: normal;
+  background: linear-gradient(105deg, var(--acid) 60%, var(--acid-deep));
+  color: var(--acid-ink);
+  padding: 0 6px;
+  border-radius: 6px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.lede { color: var(--ink-soft); font-size: 1.02rem; margin: 0 0 22px; max-width: 42ch; }
+
+section.block { margin: 26px 0; }
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.section-head h2 {
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-head .count-chip {
+  font-family: var(--font-ticket);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+/* ---- Buttons ------------------------------------------------------------- */
+
+button { font-family: inherit; }
+
+.btn {
+  appearance: none;
+  border: 1.5px solid var(--line-strong);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 15px;
+  font-weight: 700;
+  padding: 13px 20px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease),
+    background 0.12s, opacity 0.12s;
+  box-shadow: var(--shadow-pop);
+}
+.btn:hover:not(:disabled) { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--line-strong); }
+.btn:active:not(:disabled) { transform: translate(0, 0); box-shadow: 2px 2px 0 var(--line-strong); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+.btn.accent { background: var(--acid); color: var(--acid-ink); }
+.btn.coral { background: var(--coral); color: var(--coral-ink); border-color: var(--coral); box-shadow: 4px 4px 0 color-mix(in oklab, var(--coral) 55%, #000); }
+.btn.coral:hover:not(:disabled) { box-shadow: 6px 6px 0 color-mix(in oklab, var(--coral) 55%, #000); }
+.btn.full { width: 100%; }
+
+.btn-ghost {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 2px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--acid-deep);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+.btn-ghost:hover { text-decoration-color: var(--ink); }
+
+/* ---- Inputs -------------------------------------------------------------- */
+
+.field-label {
+  display: block;
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin: 0 0 8px;
+}
+
+.input {
+  width: 100%;
+  padding: 13px 14px;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.input::placeholder { color: var(--ink-faint); }
+.input:focus {
+  outline: none;
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 3px var(--acid);
+}
+
+.inline-add { display: flex; gap: 8px; }
+.inline-add .input { flex: 1; }
+.inline-add .btn { flex: 0 0 auto; padding: 13px 16px; }
+
+.error {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  background: color-mix(in oklab, var(--coral) 14%, var(--surface));
+  border: 1.5px solid var(--coral);
+  color: var(--ink);
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  margin: 14px 0;
+}
+.error::before { content: "✕"; color: var(--coral); font-weight: 800; }
+
+.hint { color: var(--ink-soft); font-size: 0.9rem; }
+.mono { font-family: var(--font-ticket); }
+
+/* ---- Wizard: step rail --------------------------------------------------- */
+
+.steprail { display: flex; gap: 6px; margin: 4px 0 22px; }
+.steprail .seg {
+  height: 5px;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.steprail .seg.done { background: var(--ink); }
+.steprail .seg.active { background: var(--line); }
+.steprail .seg.active::after {
+  content: "";
+  display: block;
+  height: 100%;
+  width: 55%;
+  border-radius: 999px;
+  background: var(--acid);
+}
+
+/* ---- Wizard: paste hero -------------------------------------------------- */
+
+.hero-card {
+  background: var(--surface);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: clamp(18px, 5vw, 26px);
+  box-shadow: var(--shadow-soft);
+}
+.platform-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-family: var(--font-ticket);
+}
+.platform-note span { display: inline-flex; align-items: center; gap: 5px; }
+.platform-note b { color: var(--ink-soft); font-weight: 700; }
+
+.or-skip { text-align: center; margin-top: 6px; }
+
+/* ---- Artist select grid (wizard step 1) ---------------------------------- */
+
+.artist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+  gap: 12px;
+  margin: 4px 0 8px;
+}
+.artist-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 6px 10px;
+  margin: 0;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  transition: transform 0.12s var(--ease), border-color 0.12s, box-shadow 0.12s;
+}
+.artist-card:hover { transform: translateY(-2px); border-color: var(--ink-faint); }
+.artist-card.selected {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-pop);
+}
+.artist-avatar-wrap { position: relative; width: 62px; height: 62px; }
+.artist-avatar, .artist-initial { width: 62px; height: 62px; border-radius: 50%; display: block; }
+.artist-avatar { object-fit: cover; background: var(--bg-2); }
+.artist-initial {
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 800;
+}
+.artist-card.selected .artist-avatar,
+.artist-card.selected .artist-initial { outline: 2.5px solid var(--acid); outline-offset: 2px; }
+.artist-check {
+  position: absolute; right: -3px; bottom: -3px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--acid); color: var(--acid-ink);
+  font-size: 13px; font-weight: 800; line-height: 22px; text-align: center;
+  border: 2px solid var(--surface);
+}
+.artist-name {
+  font-size: 12.5px; font-weight: 600; line-height: 1.25; max-width: 100%;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.artist-card .count { font-size: 11px; color: var(--ink-faint); font-family: var(--font-ticket); }
+
+/* ---- City chooser -------------------------------------------------------- */
+
+.cities {
+  list-style: none; padding: 0; margin: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 9px;
+}
+.city-chip {
+  display: flex; align-items: center; justify-content: center;
+  padding: 11px 8px; margin: 0;
+  border: 1.5px solid var(--line); border-radius: 11px;
+  background: var(--surface); cursor: pointer; font-weight: 600; font-size: 14px;
+  transition: transform 0.1s var(--ease), border-color 0.1s, background 0.1s;
+  user-select: none;
+}
+.city-chip:hover { border-color: var(--ink-faint); }
+.city-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.city-chip.on {
+  background: var(--ink); color: var(--bg); border-color: var(--ink);
+}
+
+/* ---- Manage: header block ------------------------------------------------ */
+
+.me-head { margin: 8px 0 4px; }
+.me-head .who {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font-ticket); font-size: 12px; color: var(--ink-soft);
+}
+.me-head .who .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--acid-deep); box-shadow: 0 0 0 3px color-mix(in oklab, var(--acid) 40%, transparent); }
+.me-cities { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.me-cities .pill {
+  font-size: 12px; font-family: var(--font-ticket);
+  padding: 3px 9px; border-radius: 999px;
+  border: 1.5px solid var(--line); color: var(--ink-soft);
+}
+
+/* ---- Manage: segmented tabs (sliding pill) ------------------------------- */
+
+.tabs {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-2);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  margin: 20px 0 20px;
+}
+.tabs .glider {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 10px;
+  background: var(--ink);
+  box-shadow: var(--shadow-pop);
+  transition: transform 0.28s var(--ease);
+}
+.tabs[data-active="1"] .glider { transform: translateX(calc(100% + 4px)); }
+.tabs button {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 11px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  transition: color 0.2s;
+}
+.tabs button[aria-selected="true"] { color: var(--bg); }
+.tabs button .n {
+  font-family: var(--font-ticket); font-size: 11px;
+  padding: 1px 6px; border-radius: 999px;
+  background: color-mix(in oklab, currentColor 16%, transparent);
+}
+
+/* ---- Manage: artist photo wall ------------------------------------------- */
+
+.artist-wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 10px;
+  margin: 0 0 18px;
+}
+.artist-tile {
+  position: relative; aspect-ratio: 1;
+  border-radius: var(--radius); overflow: hidden;
+  background: var(--bg-2);
+  border: 1.5px solid var(--line);
+}
+.artist-avatar-fill, .artist-initial-fill { width: 100%; height: 100%; display: block; }
 .artist-avatar-fill { object-fit: cover; }
-.artist-initial-fill { display: flex; align-items: center; justify-content: center;
-  color: #fff; font-weight: 700; font-size: 32px; }
-.artist-tile-name { position: absolute; left: 0; right: 0; bottom: 0; margin: 0;
-  padding: 20px 8px 6px; background: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0));
-  color: #fff; font-size: 13px; font-weight: 600; line-height: 1.3; text-align: left;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.artist-tile-remove { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px;
-  border-radius: 50%; border: 0; margin: 0; padding: 0; background: rgba(0,0,0,.45);
-  color: #fff; font-size: 15px; line-height: 20px; text-align: center; cursor: pointer; }
-.artist-tile-remove:hover { background: rgba(0,0,0,.7); }
+.artist-initial-fill {
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 800; font-size: 34px;
+}
+.artist-tile-name {
+  position: absolute; left: 0; right: 0; bottom: 0; margin: 0;
+  padding: 22px 9px 8px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0));
+  color: #fff; font-size: 12.5px; font-weight: 700; line-height: 1.25;
+  text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.artist-tile-remove {
+  position: absolute; top: 6px; right: 6px;
+  width: 24px; height: 24px; border-radius: 50%; border: 0; margin: 0; padding: 0;
+  background: rgba(10, 10, 12, 0.55); color: #fff; font-size: 16px; line-height: 24px;
+  text-align: center; cursor: pointer; backdrop-filter: blur(2px);
+  opacity: 0; transition: opacity 0.14s;
+}
+.artist-tile:hover .artist-tile-remove,
+.artist-tile:focus-within .artist-tile-remove { opacity: 1; }
+@media (hover: none) { .artist-tile-remove { opacity: 1; } }
+.artist-tile-remove:hover { background: var(--coral); }
 
-/* Manage page: upcoming-show cards for the followed artists. */
-.show-cards { list-style: none; padding: 0; margin: 8px 0; display: flex;
-  flex-direction: column; gap: 12px; }
-.show-card { display: flex; gap: 12px; padding: 10px; background: Canvas;
-  border: 1px solid #e4e4e7; border-radius: 14px; }
-.show-poster { width: 84px; height: 84px; flex: 0 0 auto; object-fit: cover;
-  border-radius: 10px; background: #f0f0f2; }
-.show-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.show-title { margin: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; }
-.show-artists { margin: 0; color: #555; font-size: 13px; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap; }
-.show-meta { margin: 0; font-size: 12px; color: #888; }
-.show-link { align-self: flex-start; margin-top: 4px; font-size: 13px; color: #3b5bdb;
-  text-decoration: none; }
-.show-link:hover { text-decoration: underline; }
+.add-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; aspect-ratio: 1; border-radius: var(--radius);
+  border: 1.5px dashed var(--line-strong); background: transparent;
+  color: var(--ink-soft); cursor: pointer; font-weight: 700; font-size: 13px;
+  transition: background 0.12s, color 0.12s;
+}
+.add-tile:hover { background: var(--surface); color: var(--ink); }
+.add-tile .plus { font-size: 24px; line-height: 1; }
+
+/* ---- Manage: ticket-stub show cards -------------------------------------- */
+
+.shows { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px; }
+.ticket {
+  position: relative;
+  display: flex;
+  gap: 0;
+  background: var(--surface);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-pop);
+}
+.ticket .stub {
+  flex: 0 0 auto;
+  width: 92px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; padding: 12px 6px;
+  background: var(--ink); color: var(--bg);
+  position: relative;
+}
+.ticket .stub .mon { font-family: var(--font-ticket); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.8; }
+.ticket .stub .day { font-size: 30px; font-weight: 850; line-height: 1; }
+.ticket .stub .time { font-family: var(--font-ticket); font-size: 11px; margin-top: 3px; opacity: 0.8; }
+.ticket .stub.tbd { font-family: var(--font-ticket); font-size: 12px; text-align: center; }
+/* perforation between stub and body */
+.ticket .perf {
+  flex: 0 0 auto; width: 0; align-self: stretch;
+  border-left: 2px dashed var(--line);
+  margin: 8px 0;
+}
+.ticket .body { flex: 1; min-width: 0; padding: 12px 14px; display: flex; gap: 12px; }
+.ticket .poster {
+  flex: 0 0 auto; width: 62px; height: 62px; border-radius: 9px; object-fit: cover;
+  background: var(--bg-2); border: 1.5px solid var(--line);
+}
+.ticket .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ticket .t-title { margin: 0; font-weight: 800; font-size: 15px; line-height: 1.25;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+.ticket .t-artists { margin: 0; font-size: 12.5px; font-weight: 600; }
+.ticket .t-artists mark { background: var(--acid); color: var(--acid-ink); padding: 0 4px; border-radius: 4px; }
+.ticket .t-row { margin: 0; font-size: 12px; color: var(--ink-soft); font-family: var(--font-ticket);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ticket .t-cta {
+  align-self: flex-start; margin-top: 5px; font-size: 12.5px; font-weight: 800;
+  text-decoration: none; color: var(--ink);
+  border-bottom: 2.5px solid var(--acid); padding-bottom: 1px;
+}
+.ticket .t-cta:hover { border-color: var(--coral); }
+
+/* ---- Empty states -------------------------------------------------------- */
+
+.empty {
+  text-align: center;
+  padding: 34px 20px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.empty .glyph { font-size: 34px; line-height: 1; display: block; margin-bottom: 10px; }
+.empty h3 { margin: 0 0 6px; font-size: 1rem; font-weight: 800; }
+.empty p { margin: 0 auto; color: var(--ink-soft); font-size: 0.9rem; max-width: 30ch; }
+
+/* ---- Done / notice card -------------------------------------------------- */
+
+.notice {
+  text-align: center;
+  padding: 40px 24px;
+  background: var(--surface);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  margin-top: 8vh;
+}
+.notice .big { font-size: 46px; line-height: 1; margin-bottom: 14px; }
+.notice h1 { font-size: 1.5rem; margin: 0 0 10px; letter-spacing: -0.02em; }
+.notice p { color: var(--ink-soft); margin: 0 auto; max-width: 34ch; }
+.notice b { color: var(--ink); }
+
+/* ---- Login row ----------------------------------------------------------- */
+
+.login-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 0.9rem; color: var(--ink-soft);
+  margin: 14px 0 2px;
+}
+.login-panel { margin: 12px 0; display: flex; flex-direction: column; gap: 10px; }
+
+.footer-actions { margin-top: 30px; padding-top: 18px; border-top: 1.5px solid var(--line); }
+
+/* ---- Loading ------------------------------------------------------------- */
+
+.loading { display: flex; align-items: center; gap: 12px; color: var(--ink-soft); padding: 40px 0; justify-content: center; }
+.loading .bar { display: inline-flex; gap: 4px; }
+.loading .bar i { width: 4px; height: 18px; background: var(--acid-deep); border-radius: 2px; animation: eq 1s var(--ease) infinite; }
+.loading .bar i:nth-child(2) { animation-delay: 0.15s; }
+.loading .bar i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes eq { 0%, 100% { transform: scaleY(0.4); } 50% { transform: scaleY(1); } }
+
+/* ---- Entrance motion ----------------------------------------------------- */
+
+.rise { animation: rise 0.5s var(--ease) both; }
+.rise-1 { animation-delay: 0.04s; }
+.rise-2 { animation-delay: 0.09s; }
+.rise-3 { animation-delay: 0.14s; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+.pop-in { animation: popin 0.32s var(--ease) both; }
+@keyframes popin { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

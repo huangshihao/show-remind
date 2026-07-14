@@ -1,6 +1,8 @@
 import { useState } from "react";
 
-const PALETTE = ["#3b5bdb", "#0ca678", "#e8590c", "#ae3ec9", "#1098ad", "#d6336c", "#5c7cfa", "#f08c00"];
+// Deterministic placeholder colors. Kept as lowercase 6-digit hex because
+// initialColor's contract (and its test) expects /^#[0-9a-f]{6}$/.
+const PALETTE = ["#7b61ff", "#0ca678", "#e8590c", "#ae3ec9", "#1098ad", "#d6336c", "#2f9e44", "#f08c00"];
 
 // Deterministic color from the name so the same artist always gets the same
 // placeholder circle.
@@ -24,7 +26,7 @@ export function ArtistAvatar({
   avatar?: string | null;
   // A number renders a fixed-size circle (px). "fill" renders a tile that
   // fills its container (width/height 100%) — used by the manage-page photo
-  // grid, whose square tiles are sized by CSS grid, not a fixed pixel value.
+  // wall, whose square tiles are sized by CSS grid, not a fixed pixel value.
   size?: number | "fill";
 }) {
   // Fall back to the initial circle if the photo fails to load (a Showstart
