@@ -9,13 +9,18 @@ import * as showstart from "@/lib/sources/showstart";
 
 beforeEach(applySchema);
 
+// Page 1 returns the given shows, every later page is empty (end of list).
+function mockCityPages(shows: any[]) {
+  vi.spyOn(showstart, "fetchCityShows").mockImplementation(async (_city: string, page: number) =>
+    page === 1 ? { shows } : { shows: [] },
+  );
+}
+
 it("crawlCity upserts only unseen shows and returns their ids", async () => {
-  vi.spyOn(showstart, "fetchCityShows").mockResolvedValue({
-    shows: [
-      { showstartId: "1", title: "刺猬专场", cityCode: "110000", showTime: null, url: "u1", poster: null },
-      { showstartId: "2", title: "达达", cityCode: "110000", showTime: null, url: "u2", poster: null },
-    ],
-  });
+  mockCityPages([
+    { showstartId: "1", title: "刺猬专场", cityCode: "110000", showTime: null, url: "u1", poster: null },
+    { showstartId: "2", title: "达达", cityCode: "110000", showTime: null, url: "u2", poster: null },
+  ]);
   vi.spyOn(showstart, "fetchShowDetail").mockImplementation(async (id: string) => ({
     showstartId: id, title: `t${id}`, cityCode: "110000", venue: "MAO",
     showTime: "2026-08-01T20:00:00", price: "180", url: `u${id}`, performers: ["刺猬"],
@@ -29,10 +34,29 @@ it("crawlCity upserts only unseen shows and returns their ids", async () => {
   vi.restoreAllMocks();
 });
 
+it("crawlCity paginates until an empty page", async () => {
+  const page1 = [
+    { showstartId: "1", title: "a", cityCode: "110000", showTime: null, url: "u1", poster: null },
+    { showstartId: "2", title: "b", cityCode: "110000", showTime: null, url: "u2", poster: null },
+  ];
+  const page2 = [
+    { showstartId: "3", title: "c", cityCode: "110000", showTime: null, url: "u3", poster: null },
+  ];
+  vi.spyOn(showstart, "fetchCityShows").mockImplementation(async (_city: string, page: number) =>
+    page === 1 ? { shows: page1 } : page === 2 ? { shows: page2 } : { shows: [] },
+  );
+  vi.spyOn(showstart, "fetchShowDetail").mockImplementation(async (id: string) => ({
+    showstartId: id, title: `t${id}`, cityCode: "110000", venue: null,
+    showTime: null, price: null, url: `u${id}`, performers: [], poster: null,
+  }));
+
+  const ids = await crawlCity(env.DB, "110000");
+  expect(ids.length).toBe(3); // 2 from page 1 + 1 from page 2
+  vi.restoreAllMocks();
+});
+
 it("crawlCity falls back to the crawled city when the detail response has no city", async () => {
-  vi.spyOn(showstart, "fetchCityShows").mockResolvedValue({
-    shows: [{ showstartId: "7", title: "x", cityCode: "110000", showTime: null, url: "u7", poster: null }],
-  });
+  mockCityPages([{ showstartId: "7", title: "x", cityCode: "110000", showTime: null, url: "u7", poster: null }]);
   // Showstart's detail API omits cityId, so fetchShowDetail yields cityCode "".
   vi.spyOn(showstart, "fetchShowDetail").mockResolvedValue({
     showstartId: "7", title: "x", cityCode: "", venue: null,
@@ -65,9 +89,7 @@ it("matchArtistsToExistingShows with no artist ids is a no-op", async () => {
 });
 
 it("matchNewShows links shows to followed artists by performer", async () => {
-  vi.spyOn(showstart, "fetchCityShows").mockResolvedValue({
-    shows: [{ showstartId: "1", title: "x", cityCode: "110000", showTime: null, url: "u1", poster: null }],
-  });
+  mockCityPages([{ showstartId: "1", title: "x", cityCode: "110000", showTime: null, url: "u1", poster: null }]);
   vi.spyOn(showstart, "fetchShowDetail").mockResolvedValue({
     showstartId: "1", title: "x", cityCode: "110000", venue: null,
     showTime: null, price: null, url: "u1", performers: ["刺猬"], poster: null,

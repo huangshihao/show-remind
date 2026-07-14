@@ -6,6 +6,7 @@ import {
   transformArtistSearch,
   searchArtist,
   searchArtistStrict,
+  fetchCityShows,
   ShowstartClient,
 } from "./showstart";
 
@@ -63,6 +64,36 @@ describe("transformShowList", () => {
   });
   it("returns empty shows for a missing result", () => {
     expect(transformShowList({}, "10").shows).toEqual([]);
+  });
+});
+
+describe("fetchCityShows", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("translates the行政区码 to the Showstart internal id and requests isHome:0", async () => {
+    const spy = vi
+      .spyOn(ShowstartClient.prototype, "fetchCityShowsRaw")
+      .mockResolvedValue(LIST_RAW);
+    await fetchCityShows("110000", 1); // 北京行政区码 -> Showstart id 10
+    expect(spy).toHaveBeenCalledWith("10", 1);
+  });
+
+  it("stamps the crawled行政区码 on every show (not Showstart's internal cityId)", async () => {
+    vi.spyOn(ShowstartClient.prototype, "fetchCityShowsRaw").mockResolvedValue(LIST_RAW);
+    const { shows } = await fetchCityShows("110000", 1);
+    expect(shows.length).toBeGreaterThan(0);
+    expect(shows.every((s) => s.cityCode === "110000")).toBe(true);
+  });
+
+  it("returns no shows and never calls the API for a city with no pinned Showstart id", async () => {
+    const spy = vi
+      .spyOn(ShowstartClient.prototype, "fetchCityShowsRaw")
+      .mockResolvedValue(LIST_RAW);
+    expect((await fetchCityShows("440300", 1)).shows).toEqual([]); // 深圳: unmapped
+    expect((await fetchCityShows("000000", 1)).shows).toEqual([]); // unknown
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 

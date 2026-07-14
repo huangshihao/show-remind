@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { normalizeName } from "@/lib/matcher/normalize";
+import { showstartCityId } from "@/lib/cities";
 
 // Showstart wap v3 API, reverse-engineered.
 // See docs/showstart-reverse-engineering.md for the full contract.
@@ -156,11 +157,14 @@ export class ShowstartClient {
     return data;
   }
 
-  async fetchCityShowsRaw(cityCode: string, page: number): Promise<any> {
+  // showstartCityId is Showstart's INTERNAL city id (北京=10), not the行政区码.
+  // isHome MUST be 0: isHome:1 returns a fixed home/featured feed and ignores
+  // cityId, so every city would get the same ~10 curated shows.
+  async fetchCityShowsRaw(showstartCityId: string, page: number): Promise<any> {
     const body = JSON.stringify({
       activityType: 0,
       pageNo: page,
-      isHome: 1,
+      isHome: 0,
       saleSituation: "",
       startTime: "",
       endTime: "",
@@ -169,7 +173,7 @@ export class ShowstartClient {
       service: "",
       price: "",
       cityType: 0,
-      cityId: Number(cityCode),
+      cityId: Number(showstartCityId),
       st_flpv: "",
       sign: "",
       trackPath: "",
@@ -264,11 +268,19 @@ function client(): ShowstartClient {
   return shared;
 }
 
+// cityCode is the行政区码 (e.g. 110000). Translates it to Showstart's internal
+// city id for the request, then stamps that行政区码 back onto every show — a
+// row's own cityId (when present) is Showstart's internal id, which the
+// subscription/notify city filter doesn't understand. Returns no shows for a
+// city with no pinned Showstart id, rather than crawling against a wrong id.
 export async function fetchCityShows(
   cityCode: string,
   page: number,
 ): Promise<{ shows: ShowSummary[] }> {
-  return transformShowList(await client().fetchCityShowsRaw(cityCode, page), cityCode);
+  const ssid = showstartCityId(cityCode);
+  if (ssid == null) return { shows: [] };
+  const { shows } = transformShowList(await client().fetchCityShowsRaw(String(ssid), page), cityCode);
+  return { shows: shows.map((s) => ({ ...s, cityCode })) };
 }
 
 export async function fetchShowDetail(showId: string): Promise<ShowDetail> {

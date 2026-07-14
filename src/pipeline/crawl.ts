@@ -4,16 +4,38 @@ import { filterNewShowstartIds, upsertShow } from "../db/shows";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const jitter = () => 800 + Math.floor(Math.random() * 800);
 
+// Walk the city's paged list until an empty page, up to this cap. Each page is
+// one cheap subrequest; the cap just bounds a pathologically long list.
+const MAX_PAGES = 6;
+// Detail fetch + upsert dominate the Workers 50-subrequest budget (shared with
+// the match step in the same /internal/crawl invocation). Cap how many new
+// shows we enrich per run; the rest stay unseen and are picked up next run.
+const MAX_DETAILS_PER_RUN = 8;
+
 export async function crawlCity(db: D1Database, cityCode: string): Promise<string[]> {
-  const { shows } = await fetchCityShows(cityCode, 1);
-  const newIds = await filterNewShowstartIds(db, shows.map((s) => s.showstartId));
+  const seenIds = new Set<string>();
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { shows } = await fetchCityShows(cityCode, page);
+    if (shows.length === 0) break;
+    // Dedup across pages defensively — a show appearing on two pages must not be
+    // enriched twice.
+    for (const s of shows) seenIds.add(s.showstartId);
+  }
+
+  const newIds = await filterNewShowstartIds(db, [...seenIds]);
+  const batch = newIds.slice(0, MAX_DETAILS_PER_RUN);
+  if (newIds.length > batch.length) {
+    console.log(
+      `crawlCity ${cityCode}: ${newIds.length} new shows, enriching ${batch.length} this run (budget cap), rest next run`,
+    );
+  }
+
   const savedIds: string[] = [];
-  for (const showstartId of newIds) {
+  for (const showstartId of batch) {
     await sleep(jitter());
     const detail = await fetchShowDetail(showstartId);
-    // Showstart's detail API omits cityId (detail.cityCode comes back "");
-    // fall back to the city this crawl was asked for, or the manage/notify
-    // city filter would drop the show forever.
+    // Showstart's detail API omits cityId (detail.cityCode is ""); fall back to
+    // the city this crawl was asked for so the notify/manage filter can find it.
     const saved = await upsertShow(db, { ...detail, cityCode: detail.cityCode || cityCode });
     savedIds.push(saved.id);
   }

@@ -6,7 +6,8 @@ export const configRouter = new Hono<{ Bindings: Env }>();
 
 configRouter.get("/", (c) =>
   c.json({
-    cities: CITIES,
+    // Only expose code/name to the client; showstartId is an internal crawl detail.
+    cities: CITIES.map(({ code, name }) => ({ code, name })),
     publicMode: c.env.PUBLIC_MODE === "1",
     turnstileSiteKey: c.env.TURNSTILE_SITE_KEY ?? "",
   }),
