@@ -36,6 +36,13 @@ export const subscribe = (payload: {
     body: JSON.stringify(payload),
   }).then((r) => json<{ ok: boolean }>(r));
 
+export const setManageCities = (token: string, cities: string[]) =>
+  fetch(`/api/manage/cities?token=${encodeURIComponent(token)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ cities }),
+  }).then((r) => json<{ ok: boolean }>(r));
+
 export const requestLogin = (email: string, turnstileToken?: string) =>
   fetch("/api/login", {
     method: "POST",

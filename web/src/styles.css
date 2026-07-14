@@ -404,6 +404,16 @@ button { font-family: inherit; }
   padding: 3px 9px; border-radius: 999px;
   border: 1.5px solid var(--line); color: var(--ink-soft);
 }
+.me-cities .pill-edit {
+  cursor: pointer; background: none; color: var(--ink);
+  border-style: dashed; border-color: var(--line-strong);
+  transition: background 0.12s;
+}
+.me-cities .pill-edit:hover { background: var(--surface); }
+
+.city-editor { margin-top: 12px; }
+.city-editor .editor-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.city-editor .btn { padding: 10px 18px; }
 
 /* ---- Manage: segmented tabs (sliding pill) ------------------------------- */
 

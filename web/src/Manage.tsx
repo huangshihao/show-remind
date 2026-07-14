@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { clearToken, storeToken } from "./session";
+import { getConfig, setManageCities, type Config } from "./api";
 import { ArtistAvatar } from "./ArtistAvatar";
 import { Shell, Loading } from "./Shell";
 
@@ -58,6 +59,12 @@ export function Manage({ token }: { token: string }) {
   const [view, setView] = useState<View | null>(null);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<0 | 1>(0);
+  const [config, setConfig] = useState<Config | null>(null);
+
+  useEffect(() => {
+    // City list for the editor; failure just leaves editing unavailable.
+    getConfig().then(setConfig).catch(() => {});
+  }, []);
 
   async function reload() {
     let res: Response;
@@ -93,6 +100,12 @@ export function Manage({ token }: { token: string }) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name }),
     });
+    reload();
+  }
+  async function saveCities(cities: string[]) {
+    // optimistic city update, then confirm from the server
+    setView((v) => (v ? { ...v, cities } : v));
+    await setManageCities(token, cities);
     reload();
   }
   async function unsubscribe() {
@@ -131,11 +144,12 @@ export function Manage({ token }: { token: string }) {
           <span className="dot" aria-hidden="true" />
           {view.email}
         </span>
-        <div className="me-cities">
-          {view.cities.map((c) => (
-            <span key={c} className="pill">📍 {cityName(c)}</span>
-          ))}
-        </div>
+        <CitiesRow
+          cities={view.cities}
+          options={config?.cities ?? null}
+          onSave={saveCities}
+          label={(code) => config?.cities.find((c) => c.code === code)?.name ?? cityName(code)}
+        />
       </div>
 
       <div className="tabs rise rise-1" data-active={tab} role="tablist" aria-label="关注内容">
@@ -160,6 +174,86 @@ export function Manage({ token }: { token: string }) {
         </button>
       </div>
     </Shell>
+  );
+}
+
+// City pills with an inline editor. Collapsed: shows the followed cities plus
+// an "编辑" toggle. Expanded: a chip grid (all cities from /api/config) to
+// pick 1–10, wired to POST /api/manage/cities.
+function CitiesRow({
+  cities,
+  options,
+  onSave,
+  label,
+}: {
+  cities: string[];
+  options: { code: string; name: string }[] | null;
+  onSave: (cities: string[]) => Promise<void>;
+  label: (code: string) => string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string[]>(cities);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  function open() {
+    setDraft(cities);
+    setErr("");
+    setEditing(true);
+  }
+  function toggle(code: string) {
+    setDraft((d) => (d.includes(code) ? d.filter((x) => x !== code) : [...d, code]));
+  }
+  async function save() {
+    setBusy(true);
+    setErr("");
+    try {
+      await onSave(draft);
+      setEditing(false);
+    } catch (e) {
+      setErr(String(e instanceof Error ? e.message : e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!editing)
+    return (
+      <div className="me-cities">
+        {cities.map((c) => (
+          <span key={c} className="pill">📍 {label(c)}</span>
+        ))}
+        {options && (
+          <button className="pill pill-edit" onClick={open}>✎ 编辑城市</button>
+        )}
+      </div>
+    );
+
+  const valid = draft.length >= 1 && draft.length <= 10;
+  return (
+    <div className="city-editor pop-in">
+      <p className="hint" style={{ margin: "0 0 10px" }}>选择接收提醒的城市（1–10 个）</p>
+      <ul className="cities">
+        {options!.map((c) => {
+          const on = draft.includes(c.code);
+          return (
+            <li key={c.code}>
+              <label className={`city-chip${on ? " on" : ""}`}>
+                <input type="checkbox" checked={on} onChange={() => toggle(c.code)} />
+                {c.name}
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      {err && <p className="error">{err}</p>}
+      <div className="editor-actions">
+        <button className="btn accent" onClick={save} disabled={busy || !valid}>
+          {busy ? "保存中…" : "保存"}
+        </button>
+        <button className="btn-ghost" onClick={() => setEditing(false)}>取消</button>
+      </div>
+    </div>
   );
 }
 
