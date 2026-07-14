@@ -32,17 +32,14 @@ const CITY_NAMES: Record<string, string> = {
 };
 const cityName = (code: string) => CITY_NAMES[code] ?? code;
 
-const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-
 // Split "2026-07-14T20:30:00" into ticket-stub pieces without Date parsing
 // (avoids timezone surprises; the string is already local wall-clock time).
 function stubParts(showTime: string | null): { mon: string; day: string; time: string } | null {
   if (!showTime) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(showTime);
   if (!m) return null;
-  const monthIdx = Number(m[2]) - 1;
   return {
-    mon: MONTHS[monthIdx] ?? m[2],
+    mon: `${Number(m[2])}月`,
     day: String(Number(m[3])),
     time: m[4] ? `${m[4]}:${m[5]}` : "",
   };

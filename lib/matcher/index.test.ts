@@ -60,4 +60,30 @@ describe("matchShows", () => {
     ];
     expect(matchShows([wanqing], shows)).toHaveLength(1);
   });
+
+  const wachi: MatchArtist = { id: "w", name: "蛙池", normalizedName: "蛙池", aliases: [] };
+  const gala: MatchArtist = { id: "g", name: "GALA", normalizedName: "gala", aliases: [] };
+
+  it("matches a Chinese name against a bilingual performer (蛙池 ← 蛙池WaChi)", () => {
+    const shows: MatchShow[] = [{ id: "s7", title: "音乐节", performers: ["蛙池WaChi"] }];
+    expect(matchShows([wachi], shows)).toEqual([
+      { showId: "s7", artistId: "w", matchedBy: "performer" },
+    ]);
+  });
+
+  it("does NOT falsely match a name that is only a substring of a segment (GALA ≠ Galaxy Blind-box)", () => {
+    const shows: MatchShow[] = [{ id: "s8", title: "音乐节", performers: ["宇宙盲盒Galaxy Blind-box"] }];
+    expect(matchShows([gala], shows)).toEqual([]);
+  });
+
+  it("still matches an all-Latin band whose name has spaces, without matching a single word", () => {
+    const chineseFootball: MatchArtist = {
+      id: "cf", name: "Chinese Football", normalizedName: "chinese football", aliases: [],
+    };
+    const football: MatchArtist = { id: "fb", name: "Football", normalizedName: "football", aliases: [] };
+    const shows: MatchShow[] = [{ id: "s9", title: "x", performers: ["Chinese Football"] }];
+    expect(matchShows([chineseFootball, football], shows)).toEqual([
+      { showId: "s9", artistId: "cf", matchedBy: "performer" },
+    ]);
+  });
 });
