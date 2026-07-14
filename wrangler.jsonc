@@ -19,7 +19,9 @@
       "migrations_dir": "migrations"
     }
   ],
-  "triggers": { "crons": ["0 2,12 * * *"] },
+  // Once a day at 02:00 UTC (10:00 Beijing): crawl each active city, match new
+  // shows against all followed artists, send reminder emails.
+  "triggers": { "crons": ["0 2 * * *"] },
   // Custom domain. Wrangler provisions the DNS record + TLS certificate for this
   // hostname on deploy (the zone must be in this Cloudflare account). The Worker
   // also stays reachable at its <name>.<subdomain>.workers.dev URL.
