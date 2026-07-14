@@ -18,24 +18,16 @@ Live House 的演出信息散落在各个票务平台，等你在信息流里刷
 4. **填邮箱**，点击邮件里的确认链接。
 5. 之后只要有你关注的音乐人在你的城市官宣了新的秀动演出，**你就会收到提醒邮件。**
 
-全程没有登录。每封邮件都带一个该订阅专属的 magic-link token，用它打开你的**管理页**——增删音乐人、改城市、重新导入歌单、或一键退订。这个 token 本身就是凭证：和"记住登录"链接一个信任模型，没有密码可泄露。
-
-## 你可能会喜欢它的地方
-
-- **零门槛** —— 不注册、不设密码、不装 App。粘贴、勾选、完成。
-- **输入你早就有了** —— 直接读你在网易云 / QQ 音乐里已经建好的歌单，不用重新手打一遍心愿单。
-- **跑在免费额度里** —— 整个应用就是一个 Cloudflare Worker + D1 + 定时触发器。个人自部署一份 $0 成本（见 [成本](#成本)）。
-- **隐私优先** —— 无账号、只用 magic-link；登录邮件是"发完即忘"式发送，所以响应本身没法被用来探测某个邮箱是否已注册。
-- **故障可见、修起来便宜** —— 每天有烟雾测试探活所有上游，一旦某个挂了就自动开 issue；每个数据源都是独立、带 fixture 测试的模块。
+全程没有登录。每封邮件都带一个该订阅专属的 magic-link token，用它打开你的**管理页**——增删音乐人、改城市、重新导入歌单、或一键退订。这个 token 本身就是凭证，没有密码可泄露。
 
 ## 架构速览
 
-一个 Cloudflare Worker：[Hono](https://hono.dev) 写的 API，加上一个作为静态资源托管的 Vite/React SPA，后面接 [D1](https://developers.cloudflare.com/d1/)，再用定时触发器每天跑两次 **抓取 → 匹配 → 通知** 流水线。
+一个 Cloudflare Worker：[Hono](https://hono.dev) 写的 API，加上一个作为静态资源托管的 Vite/React SPA，后面接 [D1](https://developers.cloudflare.com/d1/)，再用定时触发器每天跑一次 **抓取 → 匹配 → 通知** 流水线。
 
 ```
 歌单链接 ──► 解析（网易云 / QQ）──► 选音乐人 ──► 确认邮件
                                                    │
-   定时任务（每天 2 次）                            ▼
+   定时任务（每天 1 次）                            ▼
    逐城市：抓秀动演出 ──► 匹配关注的音乐人 ──► 提醒邮件
 ```
 
@@ -43,7 +35,7 @@ Live House 的演出信息散落在各个票务平台，等你在信息流里刷
 - `lib/` —— 与框架无关的核心：逆向出来的数据源客户端（`lib/sources/`、`lib/adapters/`）和艺人匹配器，都有 fixture 测试。
 - `web/` —— React SPA（订阅向导 + 管理页）。
 
-## 自己部署一份（Cloudflare 免费额度）
+## 部署到 Cloudflare
 
 **前置要求：** Node 22+（wrangler 4.x 需要）和 [pnpm](https://pnpm.io)。
 
@@ -60,7 +52,7 @@ Live House 的演出信息散落在各个票务平台，等你在信息流里刷
    ```bash
    pnpm db:migrate:remote
    ```
-4. **配置发信。** $0 方案是一个 [Resend](https://resend.com) API key（免费额度：3000 封/月，需要验证发信域名）。Cloudflare Email Routing 只能*收*信，从 Worker *往任意收件人发*信需要 Workers 付费版的 Cloudflare Email Sending——所以免费部署就用 Resend。然后设置这些 secret：
+4. **配置发信。** 用 [Resend](https://resend.com) 的 API key 发信（需要验证一个发信域名）。从 Worker 直接发信到任意收件人需要 Workers 付费版的 Cloudflare Email Sending，所以这里用 Resend。然后设置这些 secret：
    ```bash
    npx wrangler secret put RESEND_API_KEY
    npx wrangler secret put INTERNAL_SECRET   # 任意长随机串——给定时任务自调 /internal/crawl 做鉴权
@@ -77,7 +69,7 @@ Live House 的演出信息散落在各个票务平台，等你在信息流里刷
    pnpm web:build && npx wrangler deploy
    ```
 
-> **要把你的实例对外公开？** 在分享地址**之前**先把 `PUBLIC_MODE` 改成 `"1"`。这会在 解析/订阅/登录 接口上开启 [Turnstile](https://developers.cloudflare.com/turnstile/) 并对每个订阅施加音乐人/城市数量上限——不开的话，一个没防护的实例会很快把你的邮件额度刷爆。另外记住免费的 3000 封/月上限大约对应几百个活跃订阅者。
+> **要对外开放给别人用？** 分享地址**之前**先把 `PUBLIC_MODE` 改成 `"1"`。这会在 解析/订阅/登录 接口上开启 [Turnstile](https://developers.cloudflare.com/turnstile/) 并对每个订阅施加音乐人/城市数量上限，避免被滥用。
 
 ## 本地开发
 
@@ -97,23 +89,15 @@ pnpm test
 
 会跑两套：服务端套件（`@cloudflare/vitest-pool-workers`，覆盖 Worker 路由和 D1）和前端套件（`happy-dom`，覆盖 React SPA）。
 
-## 成本
-
-整体设计就是为了塞进 Cloudflare 的免费额度：
-
-- **Workers Free**：每天 10 万请求；定时任务逐城市抓取的扇出远低于单次调用 50 个子请求的上限。
-- **D1 Free**：5GB 存储、每天 500 万行读 / 10 万行写——本应用的读写量相比之下微不足道。
-- **Resend Free**：3000 封/月是真正的瓶颈——大约几百个活跃订阅者，之后就得升级或换发信服务商。
-
-一个和成本相关的可靠性细节：网易云*加密*的 `weapi` 接口对 Cloudflare 的出口 IP 是封的（海外 IP 会拿到 HTTP 200 但空 body），所以本项目改用网易云*明文*的 `/api/` 接口。完整踩坑记录见 `docs/superpowers/specs/2026-07-13-cloudflare-open-source-refactor-design.md` §6。
-
 ## 数据源与可靠性
 
-三个上游（QQ 音乐 `musicu`、网易云明文 `/api/`、秀动 wap v3）全是**逆向出来的、无文档的接口**——秀动请求签名是怎么逆出来的见 `docs/showstart-reverse-engineering.md`。逆向接口早晚会因为上游改动而失效。本项目不假装它不会坏，而是让"坏"变得**显眼且修起来便宜**：
+三个上游（QQ 音乐 `musicu`、网易云明文 `/api/`、秀动 wap v3）全是**逆向出来的、无文档的接口**——秀动请求签名是怎么逆出来的见 `docs/showstart-reverse-engineering.md`。逆向接口早晚会因为上游改动而失效，本项目不假装它不会坏，而是让"坏"变得显眼、修起来便宜：
 
 - 每天一个 GitHub Actions 任务打一遍所有上游，任何一个挂了就**自动开 issue**——就是顶上那个徽章。
-- 每个数据源都是**独立模块**、带 fixture 测试，所以一个坏了不会拖垮其它，修复只需动一个文件。
+- 每个数据源都是**独立模块**、带 fixture 测试，一个坏了不会拖垮其它，修复只需动一个文件。
 - 如果抓取流水线连续几次对所有城市都失败，部署的 Worker 会直接给 `ADMIN_EMAIL` 发邮件。
+
+> 注意：网易云*加密*的 `weapi` 接口对 Cloudflare 出口 IP 是封的（海外 IP 拿到 200 但空 body），所以本项目走网易云*明文*的 `/api/` 接口。
 
 请克制使用——保持请求量适度，别去猛打上游。
 
