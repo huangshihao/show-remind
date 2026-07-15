@@ -42,9 +42,9 @@
     // "1" = public instance: enables Turnstile on /api/resolve + /api/subscribe
     // and enforces artist/city caps. Requires TURNSTILE_SECRET (secret) and
     // TURNSTILE_SITE_KEY (below) to also be set.
-    "PUBLIC_MODE": "0",
+    "PUBLIC_MODE": "1",
     // Public Turnstile site key (safe to commit). Only used when PUBLIC_MODE=1.
     // Pair with the secret key set via `wrangler secret put TURNSTILE_SECRET`.
-    "TURNSTILE_SITE_KEY": ""
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAD2hEfdz6UDTRZTJ"
   }
 }

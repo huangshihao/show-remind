@@ -4,7 +4,7 @@ import { CITIES } from "@/lib/cities";
 // these is safe; a code outside the list has no Showstart mapping and would be a
 // subscription that never matches.
 export const CITY_CODES = new Set(CITIES.map((c) => c.code));
-export const MAX_ARTISTS = 100;
+export const MAX_ARTISTS = 500;
 export const MAX_CITIES = 10;
 
 export function validCities(cities: string[]): boolean {
