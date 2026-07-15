@@ -3,7 +3,7 @@ import { env } from "cloudflare:test";
 import { applySchema } from "../db/apply-schema";
 import { app } from "../../src/index";
 import { createPendingSubscription, activateByToken } from "../../src/db/subscriptions";
-import { setArtists, listArtists } from "../../src/db/subscription-artists";
+import { setArtists, listArtists, addArtistToSubscription } from "../../src/db/subscription-artists";
 import { upsertShow } from "../../src/db/shows";
 import { persistMatches } from "../../src/db/show-artists";
 import * as showstart from "@/lib/sources/showstart";
@@ -145,10 +145,9 @@ it("unknown token returns 404 everywhere", async () => {
   expect((await app.request("/api/manage/cities?token=nope", j({ cities: ["110000"] }), env)).status).toBe(404);
 });
 
-it("add and remove artists", async () => {
+it("remove artists", async () => {
   const sub = await activeSub();
-  const add = await app.request(`/api/manage/artists?token=${sub.token}`, j({ name: "海龟先生" }), env);
-  const { id } = (await add.json()) as any;
+  const id = await addArtistToSubscription(env.DB, sub.id, "海龟先生");
   expect((await listArtists(env.DB, sub.id)).length).toBe(2);
   const del = await app.request(`/api/manage/artists/${id}?token=${sub.token}`, { method: "DELETE" }, env);
   expect(del.status).toBe(200);
@@ -162,10 +161,25 @@ it("adding an artist links it to already-crawled upcoming shows", async () => {
     showTime: "2099-09-01T20:00:00", price: "200", url: "https://x/901", performers: ["海龟先生"],
     poster: null,
   });
-  await app.request(`/api/manage/artists?token=${sub.token}`, j({ name: "海龟先生" }), env);
+  vi.stubGlobal("fetch", vi.fn(async () =>
+    new Response(
+      JSON.stringify({
+        request: {
+          code: 0,
+          data: {
+            dirinfo: { title: "L" },
+            songlist_size: 1,
+            songlist: [{ name: "s1", singer: [{ name: "海龟先生" }] }],
+          },
+        },
+      }),
+    ),
+  ));
+  await app.request(`/api/manage/import?token=${sub.token}`, j({ link: "https://y.qq.com/n/ryqq/playlist/9" }), env);
   const res = await app.request(`/api/manage?token=${sub.token}`, {}, env);
   const body = (await res.json()) as any;
   expect(body.shows.map((s: any) => s.id)).toEqual([show.id]);
+  vi.unstubAllGlobals();
 });
 
 it("update cities validates the set", async () => {
