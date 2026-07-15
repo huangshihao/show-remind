@@ -105,6 +105,42 @@ it("crawlCity stops paging once it reaches shows it already has", async () => {
   vi.restoreAllMocks();
 });
 
+// The listing carries showStartTime, so we already know a show is over before
+// spending a detail fetch on it — and ~45% of a city's listing is in the past.
+// Those fetches are the scarce resource (50 external subrequests per invocation),
+// so they must not be burned on gigs nobody can attend.
+it("crawlCity does not spend a detail fetch on a show that already happened", async () => {
+  vi.spyOn(rateLimit, "paceCrawl").mockResolvedValue();
+  const beijing = (offsetMs: number) =>
+    new Date(Date.now() + offsetMs + 8 * 60 * 60 * 1000).toISOString().slice(0, 19);
+  vi.spyOn(showstart, "fetchCityShows").mockImplementation(async (_c, page) =>
+    page === 1
+      ? {
+          shows: [
+            { showstartId: "over", title: "上个月的音乐节", cityCode: "110000",
+              showTime: beijing(-30 * 24 * 3600 * 1000), url: "u1", poster: null },
+            { showstartId: "soon", title: "下周的演出", cityCode: "110000",
+              showTime: beijing(7 * 24 * 3600 * 1000), url: "u2", poster: null },
+            { showstartId: "tbd", title: "时间待定", cityCode: "110000",
+              showTime: null, url: "u3", poster: null },
+          ],
+        }
+      : { shows: [] },
+  );
+  const detailSpy = vi.spyOn(showstart, "fetchShowDetail").mockImplementation(async (id: string) => ({
+    showstartId: id, title: `t${id}`, cityCode: "110000", venue: null,
+    showTime: null, price: null, url: `u${id}`, performers: [], poster: null,
+  }));
+
+  await crawlCity(env.DB, "110000");
+
+  const fetched = detailSpy.mock.calls.map((c) => c[0]);
+  expect(fetched).not.toContain("over");
+  expect(fetched).toContain("soon");
+  expect(fetched).toContain("tbd"); // unknown date: still worth enriching
+  vi.restoreAllMocks();
+});
+
 it("crawlCity falls back to the crawled city when the detail response has no city", async () => {
   mockCityPages([{ showstartId: "7", title: "x", cityCode: "110000", showTime: null, url: "u7", poster: null }]);
   // Showstart's detail API omits cityId, so fetchShowDetail yields cityCode "".

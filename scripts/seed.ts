@@ -1,12 +1,16 @@
 // One-off/occasional bulk seeder: crawl Showstart from THIS machine and write the
 // results straight into the remote D1.
 //
-// Why this exists: the Worker crawl is incremental and healthy in steady state
-// (a city gains a handful of shows a day), but a COLD city has ~150 shows and the
-// Worker can only enrich MAX_DETAILS_PER_RUN of them per daily run — so seeding a
-// fresh city from empty takes days. Running locally has none of the Workers Free
-// limits (50 external subrequests, 15-min cron wall, 10ms CPU), so the whole
-// country can be filled in one pass.
+// Why this exists: the Worker cannot enumerate a city, and no amount of tuning
+// will let it. 上海's listing runs to ~4000 shows; even the ~45 pages that cover
+// just its future cost more external subrequests than a Workers Free invocation
+// gets (50) before a single detail is fetched. The Worker's job is the steady
+// state instead: it sorts newest-published, so anything announced since yesterday
+// is on page 1, and it stops as soon as it reaches shows it already has.
+//
+// Completeness is this script's job. Locally there is no subrequest ceiling, no
+// 15-minute cron wall and no 10ms CPU limit, so it walks a city to the end.
+// Use it to bootstrap a cold city; the Worker keeps it warm afterwards.
 //
 // Safe to re-run and safe to interrupt: each city is written as soon as it is
 // crawled, and only shows whose showstart_id is not already in D1 are fetched, so
@@ -35,7 +39,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { CITIES } from "../lib/cities";
-import { fetchCityShows, fetchShowDetail, type ShowDetail } from "../lib/sources/showstart";
+import { fetchCityShows, fetchShowDetail, SORT_BY_DATE, type ShowDetail } from "../lib/sources/showstart";
+import { isUpcoming } from "../lib/time";
 import { matchShows, type MatchArtist, type MatchShow } from "../lib/matcher";
 
 // Local pacing. The Worker crawler sleeps ~800-1600ms between detail fetches to
@@ -43,8 +48,10 @@ import { matchShows, type MatchArtist, type MatchShow } from "../lib/matcher";
 // little concurrency, since ~4800 shows one-at-a-time would take over an hour.
 const CONCURRENCY = 3;
 const PACE_MS = () => 600 + Math.floor(Math.random() * 600);
-// Generous: a local run has no page budget, but stop runaway pagination.
-const MAX_PAGES = 40;
+// A runaway stop, not a budget: listCity walks the date sort and stops itself
+// once the listing turns into history (~45 pages). The old cap of 40 was a budget
+// and silently truncated every city at 400 shows.
+const MAX_PAGES = 120;
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined =>
@@ -93,16 +100,61 @@ const q = (v: string | null | undefined): string =>
 
 // --- crawl ------------------------------------------------------------------
 
+// Enumerate a city's UPCOMING shows via the date sort, which runs ascending
+// through the future and then turns around into the past (see SORT_BY_DATE). So
+// the whole future lives in the first ~45 pages: walk until the listing turns
+// around, then stop. Walking on would spend hundreds of pages on years of
+// history — 上海 lists ~4000 shows of which only ~373 have not happened yet.
+//
+// The listing carries showStartTime, so past shows are dropped here for free
+// rather than costing a ~1s detail fetch each to discover.
+//
+// The date sort's real shape is lumpier than "future then past" (probed on 上海):
+//
+//   p1      5/10 upcoming   mixed — long-running 话剧 that opened months ago
+//   p2-p4   0/10            a POCKET of purely past shows
+//   p5      4/10
+//   p6-p40  10/10           the future, ascending 07-16 -> 11-06
+//   p44+    0/10            the history tail, descending away
+//
+// So neither "this page is all past" nor "the dates turned around" can mark the
+// end — both trip on the p2-p4 pocket and quit with 5 of 上海's 373 upcoming
+// shows. Only a run of empty pages LONGER than that pocket is evidence of the
+// tail. Listing is cheap (~0.35s/page), so the tolerance is generous and the hard
+// cap is well past 上海's ~44.
+const EMPTY_PAGES_BEFORE_STOP = 8;
+
 async function listCity(code: string, name: string): Promise<string[]> {
-  const ids = new Set<string>();
+  const upcoming = new Set<string>();
+  let listed = 0;
+  let pages = 0;
+  let emptyRun = 0;
+  let stoppedBy = "end of listing";
+
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { shows } = await fetchCityShows(code, page);
+    const { shows } = await fetchCityShows(code, page, SORT_BY_DATE);
     if (shows.length === 0) break;
-    for (const s of shows) ids.add(s.showstartId);
+    pages = page;
+    listed += shows.length;
+
+    const fresh = shows.filter((s) => isUpcoming(s.showTime));
+    for (const s of fresh) upcoming.add(s.showstartId);
+
+    if (fresh.length === 0) {
+      if (++emptyRun >= EMPTY_PAGES_BEFORE_STOP) {
+        stoppedBy = `${EMPTY_PAGES_BEFORE_STOP} pages of history`;
+        break;
+      }
+    } else {
+      emptyRun = 0;
+    }
     await sleep(200);
   }
-  console.log(`   ${name}: ${ids.size} shows listed`);
-  return [...ids];
+
+  // Never truncate silently — that is how the 400-show cap hid for so long.
+  if (pages >= MAX_PAGES) stoppedBy = `HIT THE ${MAX_PAGES}-PAGE GUARD — city may be incomplete`;
+  console.log(`   ${name}: ${listed} listed / ${pages} pages -> ${upcoming.size} upcoming (stop: ${stoppedBy})`);
+  return [...upcoming];
 }
 
 // Fetch details with a small worker pool, pacing each request.

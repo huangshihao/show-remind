@@ -1,4 +1,5 @@
 import { fetchCityShows, fetchShowDetail } from "@/lib/sources/showstart";
+import { isUpcoming } from "@/lib/time";
 import { filterNewShowstartIds, upsertShow } from "../db/shows";
 import { paceCrawl } from "./rate-limit";
 
@@ -34,13 +35,20 @@ export async function crawlCity(db: D1Database, cityCode: string): Promise<strin
     if (shows.length === 0) break;
 
     const unseen = await filterNewShowstartIds(db, [...new Set(shows.map((s) => s.showstartId))]);
-    for (const id of unseen) {
-      if (!queued.has(id)) {
-        queued.add(id);
-        newIds.push(id);
-      }
+    // The listing already tells us when each show starts, and ~45% of a city's
+    // listing is in the past. Detail fetches are the scarce resource, so decide
+    // here rather than paying to learn what we already know.
+    const unseenSet = new Set(unseen);
+    for (const s of shows) {
+      if (!unseenSet.has(s.showstartId) || queued.has(s.showstartId)) continue;
+      if (!isUpcoming(s.showTime)) continue;
+      queued.add(s.showstartId);
+      newIds.push(s.showstartId);
     }
 
+    // Note: an all-known page ends the walk even if every show on it was a past
+    // show we skipped — "known" is about the listing position we have reached,
+    // not about what we chose to enrich.
     if (unseen.length === 0) {
       if (++knownPagesInARow >= KNOWN_PAGES_BEFORE_STOP) break;
     } else {
