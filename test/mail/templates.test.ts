@@ -21,6 +21,38 @@ it("loginEmail links to the /manage page with the token", () => {
   expect(html).toContain("https://s.com/manage?token=tok123");
 });
 
+it("reminderEmail subject names the artist for one show, counts shows for several", () => {
+  const one = reminderEmail([show], "https://s.com", "t");
+  expect(one.subject).toContain("刺猬");
+  const second: NotifyShow = { ...show, showId: "s2", title: "另一场", artistNames: ["海龟先生"] };
+  const third: NotifyShow = { ...show, showId: "s3", title: "第三场", artistNames: ["低苦艾"] };
+  const many = reminderEmail([show, second, third], "https://s.com", "t");
+  expect(many.subject).toContain("3");
+});
+
+it("reminderEmail renders every show in ONE email, with city name and a ticket CTA", () => {
+  const second: NotifyShow = {
+    ...show, showId: "s2", title: "上海站", cityCode: "310000",
+    artistNames: ["海龟先生"], url: "https://wap.showstart.com/x/2",
+  };
+  const { html } = reminderEmail([show, second], "https://s.com", "t");
+  // both shows in one mail
+  expect(html).toContain("刺猬专场");
+  expect(html).toContain("上海站");
+  // city codes rendered as names
+  expect(html).toContain("北京");
+  expect(html).toContain("上海");
+  // one ticket link per show
+  expect(html).toContain("https://wap.showstart.com/x/1");
+  expect(html).toContain("https://wap.showstart.com/x/2");
+});
+
+it("reminderEmail shows a 待定 stub when the show has no parseable time", () => {
+  const undated: NotifyShow = { ...show, showTime: null };
+  const { html } = reminderEmail([undated], "https://s.com", "t");
+  expect(html).toContain("待定");
+});
+
 it("reminderEmail has only an unsubscribe link in the footer (no manage link)", () => {
   const { html } = reminderEmail([show], "https://s.com", "tok123");
   expect(html).toContain("刺猬");
@@ -51,11 +83,11 @@ it("reminderEmail renders no img tag when the show has no poster", () => {
   expect(html).not.toContain("<img");
 });
 
-it("reminderEmail escapes HTML in the showTime-derived 'when' field", () => {
-  // showTime is sliced to the first 16 chars before rendering, so the
-  // injected markup must appear within that window to exercise escaping.
+it("reminderEmail never renders a raw showTime string (unparseable time becomes a 待定 stub)", () => {
+  // The date stub is built by regex from showTime; anything that doesn't
+  // match renders as the 待定 stub, so hostile input has no injection path.
   const malicious: NotifyShow = { ...show, showTime: "<script>alert(1)</script>" };
   const { html } = reminderEmail([malicious], "https://s.com", "tok123");
   expect(html).not.toContain("<script>");
-  expect(html).toContain("&lt;script&gt;");
+  expect(html).toContain("待定");
 });
