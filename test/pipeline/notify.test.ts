@@ -7,6 +7,7 @@ import { addArtistToSubscription } from "../../src/db/subscription-artists";
 import { upsertShow } from "../../src/db/shows";
 import { persistMatches } from "../../src/db/show-artists";
 import { runNotifications } from "../../src/pipeline/notify";
+import { SubrequestBudget } from "@/lib/budget";
 
 beforeEach(applySchema);
 
@@ -35,6 +36,29 @@ it("sends one reminder per candidate and marks shows sent", async () => {
   // second run: already notified, nothing to send
   expect((await runNotifications(env.DB, typedEnv)).sent).toBe(0);
   vi.unstubAllGlobals();
+});
+
+it("stops sending when the subrequest budget runs out; unsent reminders go out on the next run", async () => {
+  const artistShow = await upsertShow(env.DB, {
+    showstartId: "b1", title: "刺猬专场", cityCode: "110000", venue: "MAO",
+    showTime: "2026-08-01T20:00:00", price: "180", url: "https://x/b1", performers: ["刺猬"],
+    poster: null,
+  });
+  for (const email of ["one@b.com", "two@b.com", "three@b.com"]) {
+    const sub = await createPendingSubscription(env.DB, email, ["110000"]);
+    await activateByToken(env.DB, sub.token);
+    const artistId = await addArtistToSubscription(env.DB, sub.id, "刺猬");
+    await persistMatches(env.DB, [{ showId: artistShow.id, artistId, matchedBy: "performer" }]);
+  }
+
+  // budget 2 = two send attempts; the third candidate is deferred, not failed
+  const first = await runNotifications(env.DB, typedEnv, new SubrequestBudget(2));
+  expect(first.sent).toBe(2);
+  expect(first.failed).toBe(0);
+
+  // next run (fresh budget) picks up the deferred one — nothing lost
+  const second = await runNotifications(env.DB, typedEnv, new SubrequestBudget(2));
+  expect(second.sent).toBe(1);
 });
 
 // A reminder for a gig that already happened is worse than no reminder. The

@@ -1,5 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { transformQqDetail } from "./qq";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { transformQqDetail, fetchQqPlaylist } from "./qq";
+import { SubrequestBudget } from "@/lib/budget";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 const DATA = {
   dirinfo: { title: "摇滚精神 · 身临其境的叙事现场" },
@@ -43,5 +49,34 @@ describe("transformQqDetail", () => {
   });
   it("returns empty title/songs for missing data", () => {
     expect(transformQqDetail({})).toEqual({ title: "", songs: [] });
+  });
+});
+
+describe("fetchQqPlaylist pagination budget", () => {
+  it("stops paginating when the subrequest budget runs out, keeping the songs fetched so far", async () => {
+    // A 500-song playlist would normally take 5 pages of 100.
+    const page = (n: number) =>
+      new Response(
+        JSON.stringify({
+          request: {
+            code: 0,
+            data: {
+              dirinfo: { title: "big" },
+              songlist_size: 500,
+              songlist: Array.from({ length: 100 }, (_, i) => ({
+                name: `s${n}-${i}`,
+                singer: [{ name: `a${n}-${i}` }],
+              })),
+            },
+          },
+        }),
+      );
+    let calls = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => page(++calls)));
+
+    const pl = await fetchQqPlaylist("42", new SubrequestBudget(3));
+    expect(calls).toBe(3); // page 1 + 2 more, then the budget refuses
+    expect(pl.songs).toHaveLength(300);
+    expect(pl.title).toBe("big");
   });
 });

@@ -1,5 +1,6 @@
 import { zzcSign } from "./qq-sign";
 import BASE_COMM from "./qq-device.json";
+import { SubrequestBudget } from "@/lib/budget";
 
 // QQ Music web API (u.y.qq.com/cgi-bin/musicu.fcg), reverse-engineered from
 // qqmusic-api-python. The request is {comm, request:{module,method,param}};
@@ -74,8 +75,16 @@ export function transformQqDetail(data: any): QqPlaylist {
   return { title: data?.dirinfo?.title ?? "", songs };
 }
 
-export async function fetchQqPlaylist(externalId: string): Promise<QqPlaylist> {
+// `budget` caps the EXTERNAL fetches this call may spend (a huge playlist can
+// take dozens of pages — MAX_PAGES alone allows 60, which would blow the
+// 50-per-invocation Workers Free ceiling). When it runs out mid-list the
+// result is truncated, same semantics as hitting MAX_PAGES.
+export async function fetchQqPlaylist(
+  externalId: string,
+  budget: SubrequestBudget = new SubrequestBudget(),
+): Promise<QqPlaylist> {
   const id = Number(externalId);
+  if (!budget.tryTake()) throw new Error(`qq playlist ${externalId}: subrequest budget exhausted`);
   const first = await getDetailRaw(id, PAGE_SIZE, 1);
   const data = detailData(first);
   if (first?.request?.code !== 0 && data?.code !== 0) {
@@ -87,7 +96,7 @@ export async function fetchQqPlaylist(externalId: string): Promise<QqPlaylist> {
   const total: number = data?.songlist_size ?? songs.length;
 
   let page = 2;
-  while (songs.length < total && page <= MAX_PAGES) {
+  while (songs.length < total && page <= MAX_PAGES && budget.tryTake()) {
     const next = await getDetailRaw(id, PAGE_SIZE, page);
     const batch = transformQqDetail(detailData(next)).songs;
     if (batch.length === 0) break;

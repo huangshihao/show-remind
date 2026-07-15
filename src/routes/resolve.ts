@@ -3,6 +3,7 @@ import type { Env } from "../env";
 import { resolvePlaylist } from "../services/resolve";
 import { verifyTurnstile } from "../turnstile";
 import { InvalidPlaylistLinkError } from "@/lib/adapters/parse-link";
+import { SubrequestBudget } from "@/lib/budget";
 
 export const resolveRouter = new Hono<{ Bindings: Env }>();
 
@@ -21,7 +22,8 @@ resolveRouter.post("/", async (c) => {
   }
 
   try {
-    const result = await resolvePlaylist(link);
+    // One budget per invocation: playlist pagination + avatar lookups share it.
+    const result = await resolvePlaylist(link, new SubrequestBudget());
     if (result.artists.length === 0) {
       return c.json({ error: "没有从歌单里解析到艺人，换个歌单试试" }, 422);
     }

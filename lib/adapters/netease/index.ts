@@ -1,5 +1,6 @@
 import type { ResolvedPlaylist, ResolvedSong, ResolvedSongArtist } from "@/lib/adapters/types";
 import { fetchPlaylistDetailRaw, fetchSongDetailRaw, fetchArtistHeadRaw } from "./client";
+import { SubrequestBudget } from "@/lib/budget";
 
 const BATCH_SIZE = 500;
 
@@ -41,10 +42,19 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-export async function resolveNeteasePlaylist(externalId: string): Promise<ResolvedPlaylist> {
+// `budget` caps the EXTERNAL fetches (1 playlist detail + 1 per 500-song
+// batch). Running out mid-list truncates the song list — graceful, mirrors
+// the QQ pagination cap.
+export async function resolveNeteasePlaylist(
+  externalId: string,
+  budget: SubrequestBudget = new SubrequestBudget(),
+): Promise<ResolvedPlaylist> {
+  if (!budget.tryTake())
+    throw new Error(`netease playlist ${externalId}: subrequest budget exhausted`);
   const meta = parsePlaylistMeta(await fetchPlaylistDetailRaw(externalId));
   const songs: ResolvedSong[] = [];
   for (const batch of chunk(meta.trackIds, BATCH_SIZE)) {
+    if (!budget.tryTake()) break;
     const raw = await fetchSongDetailRaw(batch);
     songs.push(...parseSongDetail(raw));
   }

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import playlistDetail from "./__fixtures__/playlist_detail.json";
 import songDetail from "./__fixtures__/song_detail.json";
 import * as client from "./client";
+import { SubrequestBudget } from "@/lib/budget";
 import {
   parsePlaylistMeta,
   parseSongDetail,
@@ -75,5 +76,19 @@ describe("resolveNeteasePlaylist", () => {
     vi.spyOn(client, "fetchPlaylistDetailRaw").mockResolvedValue(playlistDetail);
     vi.spyOn(client, "fetchSongDetailRaw").mockRejectedValue(new Error("risk control"));
     await expect(resolveNeteasePlaylist("999")).rejects.toThrow("risk control");
+  });
+
+  it("stops fetching song batches when the subrequest budget runs out, keeping songs so far", async () => {
+    // 1200 track ids -> 3 batches of 500. Budget 2 = playlist detail + 1 batch.
+    const ids = Array.from({ length: 1200 }, (_, i) => ({ id: i + 1 }));
+    vi.spyOn(client, "fetchPlaylistDetailRaw").mockResolvedValue({
+      playlist: { name: "big", trackIds: ids },
+    });
+    const songSpy = vi.spyOn(client, "fetchSongDetailRaw").mockImplementation(async (batch) => ({
+      songs: batch.map((id) => ({ id, name: `s${id}`, ar: [{ id: 1, name: "a" }] })),
+    }));
+    const r = await resolveNeteasePlaylist("999", new SubrequestBudget(2));
+    expect(songSpy).toHaveBeenCalledTimes(1);
+    expect(r.songs).toHaveLength(500);
   });
 });

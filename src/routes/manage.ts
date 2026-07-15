@@ -8,86 +8,14 @@ import {
   countArtists,
 } from "../db/subscription-artists";
 import { matchArtistsToExistingShows } from "../pipeline/match";
-import { setArtistAvatar, setArtistNeteaseId, type ArtistRow } from "../db/artists";
-import { searchArtistStrict } from "@/lib/sources/showstart";
-import { fetchArtistAvatar } from "@/lib/adapters/netease";
+import { backfillAvatars } from "../services/avatar-backfill";
 import { resolvePlaylist } from "../services/resolve";
 import { validCities, MAX_ARTISTS } from "../services/limits";
 import { verifyTurnstile } from "../turnstile";
 import { findUpcomingShowsForSubscription } from "../db/my-shows";
+import { SubrequestBudget } from "@/lib/budget";
 
 export const manageRouter = new Hono<{ Bindings: Env }>();
-
-// Cap avatar lookups per manage load. Each pending artist costs 1 external
-// fetch (netease head-info or Showstart search — D1 writes don't count
-// against the 50-external-subrequest budget), and this runs in waitUntil so
-// it shares the same invocation budget as the response. 30 lookups + the
-// rare netease→Showstart double leaves comfortable headroom; artists past
-// the cap stay pending and get picked up on a later load. See
-// src/services/resolve.ts for the analogous cap on the resolve path.
-const AVATAR_LOOKUP_LIMIT = 30;
-// One slow Showstart search shouldn't hang the whole manage response.
-const AVATAR_LOOKUP_TIMEOUT_MS = 4000;
-
-// Unlike a `Promise.race` that resolves null on timeout, this REJECTS — so a
-// timeout is indistinguishable from any other thrown error to the caller,
-// and neither gets treated as "search succeeded, no match" (see A1 below).
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer!: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error("avatar lookup timed out")), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
-// Lazily backfill avatars. Pending rows are those never looked up
-// (avatar === null) plus searched-empty ("") rows that gained a netease id —
-// a Showstart miss says nothing about netease, which knows every playlist
-// artist. avatar semantics: null = never searched, "" = every source we had
-// came up empty (don't re-search), a URL = found. Mutates rows in place;
-// never throws.
-//
-// An artist with a netease id resolves via head-info (exact, by id). A
-// DEFINITIVE "profile has no photo" clears the id (so the row can't loop
-// through the netease path on every load) and falls through to one Showstart
-// name search. Artists without an id go straight to Showstart.
-//
-// Critical: only a DEFINITIVE "lookup succeeded, nothing found" may cache
-// "". A timeout or a network/parse error must leave the row's state as-is so
-// it is retried on the next load — caching those as "" would be
-// indistinguishable from a genuine miss and the avatar would never be found.
-// That's why this uses searchArtistStrict / fetchArtistAvatar (both throw on
-// error) instead of a null-swallowing variant.
-async function backfillAvatars(db: D1Database, artists: ArtistRow[]): Promise<void> {
-  const pending = artists
-    .filter((a) => a.avatar === null || (a.avatar === "" && a.neteaseId))
-    .slice(0, AVATAR_LOOKUP_LIMIT);
-  await Promise.all(
-    pending.map(async (artist) => {
-      try {
-        if (artist.neteaseId) {
-          const fromNetease = await withTimeout(
-            fetchArtistAvatar(artist.neteaseId),
-            AVATAR_LOOKUP_TIMEOUT_MS,
-          );
-          if (fromNetease) {
-            await setArtistAvatar(db, artist.id, fromNetease);
-            artist.avatar = fromNetease;
-            return;
-          }
-          await setArtistNeteaseId(db, artist.id, null);
-          artist.neteaseId = null;
-        }
-        const hit = await withTimeout(searchArtistStrict(artist.name), AVATAR_LOOKUP_TIMEOUT_MS);
-        const avatar = hit?.avatar ?? ""; // mark searched-empty when no hit or hit has no photo
-        await setArtistAvatar(db, artist.id, avatar);
-        artist.avatar = avatar;
-      } catch {
-        // timeout or error: leave the row as-is, retried on a later load
-      }
-    }),
-  );
-}
 
 // Resolve the token on every request; 404 (not 401/403) to avoid leaking existence.
 async function requireSub(c: any): Promise<SubscriptionRow | null> {
@@ -105,10 +33,12 @@ manageRouter.get("/", async (c) => {
   // what the DB held at read time, not a race with the background writes.
   // "" (searched-empty) collapses to null so the frontend shows a placeholder.
   const artistsView = artists.map((a) => ({ id: a.id, name: a.name, avatar: a.avatar || null }));
-  // Off the response path: Showstart lookups (up to 15 × 4s) used to gate the
+  // Off the response path: avatar lookups (up to 30 × 4s) used to gate the
   // whole page load. waitUntil lets the response return now; freshly found
-  // avatars show up on the next load.
-  c.executionCtx.waitUntil(backfillAvatars(c.env.DB, artists));
+  // avatars show up on the next load. The budget is fresh — this GET spends
+  // no external fetches before here — but waitUntil work still shares the
+  // invocation's 50-external ceiling, which the budget enforces.
+  c.executionCtx.waitUntil(backfillAvatars(c.env.DB, artists, new SubrequestBudget()));
   const shows = await findUpcomingShowsForSubscription(c.env.DB, sub.id);
   return c.json({
     email: sub.email,
@@ -150,7 +80,8 @@ manageRouter.post("/import", async (c) => {
   }
   let resolved;
   try {
-    resolved = await resolvePlaylist(link);
+    // One budget per invocation: playlist pagination + avatar lookups share it.
+    resolved = await resolvePlaylist(link, new SubrequestBudget());
   } catch {
     return c.json({ error: "歌单解析失败，请稍后重试" }, 502);
   }
