@@ -27,13 +27,12 @@ it("preserves avatar urls on loaded artists", () => {
   expect(selectedArtistNames(s).sort()).toEqual(["刺猬", "达达"]);
 });
 
-it("toggles and adds manual artists without duplicates", () => {
+it("toggles artists off and on", () => {
   let s = wizardReducer(initialWizard(), {
     type: "LOADED_PLAYLIST", title: "x", artists: [{ name: "刺猬", songCount: 1 }],
   });
   s = wizardReducer(s, { type: "TOGGLE_ARTIST", name: "刺猬" });
   expect(selectedArtistNames(s)).toEqual([]);
-  s = wizardReducer(s, { type: "ADD_MANUAL", name: "海龟先生" });
-  s = wizardReducer(s, { type: "ADD_MANUAL", name: "海龟先生" });
-  expect(selectedArtistNames(s)).toEqual(["海龟先生"]);
+  s = wizardReducer(s, { type: "TOGGLE_ARTIST", name: "刺猬" });
+  expect(selectedArtistNames(s)).toEqual(["刺猬"]);
 });

@@ -104,12 +104,6 @@ export function Wizard() {
             </p>
           </div>
 
-          <p className="or-skip">
-            <button className="btn-ghost" onClick={() => dispatch({ type: "LOADED_PLAYLIST", title: "手动添加", artists: [] })}>
-              没有歌单？手动输入音乐人
-            </button>
-          </p>
-
           <LoginEntry config={config} />
         </section>
       )}
@@ -143,9 +137,6 @@ export function Wizard() {
                 </button>
               );
             })}
-          </div>
-          <div style={{ margin: "12px 0 20px" }}>
-            <ManualAdd onAdd={(name) => dispatch({ type: "ADD_MANUAL", name })} />
           </div>
           <button className="btn full" disabled={!selectedCount} onClick={() => dispatch({ type: "GOTO", step: 2 })}>
             下一步 · 选城市
@@ -285,26 +276,6 @@ function LoginEntry({ config }: { config: Config | null }) {
       </div>
       {config?.publicMode && <Turnstile siteKey={config.turnstileSiteKey} onToken={setToken} />}
       {error && <p className="error">{error}</p>}
-    </div>
-  );
-}
-
-function ManualAdd({ onAdd }: { onAdd: (name: string) => void }) {
-  const [v, setV] = useState("");
-  function add() {
-    onAdd(v);
-    setV("");
-  }
-  return (
-    <div className="inline-add">
-      <input
-        className="input"
-        value={v}
-        onChange={(e) => setV(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && add()}
-        placeholder="手动添加音乐人"
-      />
-      <button className="btn" onClick={add} disabled={!v.trim()}>添加</button>
     </div>
   );
 }
