@@ -15,3 +15,6 @@ dist/
 
 # pnpm local build-approval file (regenerated on install)
 pnpm-workspace.yaml
+
+# Claude Code session worktrees (local tooling state)
+.claude/worktrees/

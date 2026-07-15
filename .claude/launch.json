@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "wrangler-dev",
+      "runtimeExecutable": "mise",
+      "runtimeArgs": ["x", "node@22", "--", "npx", "wrangler", "dev", "--port", "8787"],
+      "port": 8787
+    }
+  ]
+}
