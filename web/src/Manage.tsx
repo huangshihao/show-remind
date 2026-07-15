@@ -98,14 +98,6 @@ export function Manage({ token }: { token: string }) {
     await fetch(`/api/manage/artists/${id}?token=${token}`, { method: "DELETE" });
     reload();
   }
-  async function addArtist(name: string) {
-    await fetch(`/api/manage/artists?token=${token}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    reload();
-  }
   async function saveCities(cities: string[]) {
     // optimistic city update, then confirm from the server
     setView((v) => (v ? { ...v, cities } : v));
@@ -172,7 +164,6 @@ export function Manage({ token }: { token: string }) {
           token={token}
           config={config}
           onImported={reload}
-          onAdd={addArtist}
           onRemove={removeArtist}
         />
       ) : (
@@ -331,35 +322,23 @@ function ArtistsTab({
   token,
   config,
   onImported,
-  onAdd,
   onRemove,
 }: {
   artists: View["artists"];
   token: string;
   config: Config | null;
   onImported: () => void;
-  onAdd: (name: string) => void;
   onRemove: (id: string) => void;
 }) {
-  const [adding, setAdding] = useState(false);
-  const [v, setV] = useState("");
-  function submit() {
-    const name = v.trim();
-    if (!name) return;
-    onAdd(name);
-    setV("");
-    setAdding(false);
-  }
-
-  if (artists.length === 0 && !adding)
+  if (artists.length === 0)
     return (
       <section className="rise">
         <div className="empty">
           <span className="glyph">🎸</span>
           <h3>还没有关注的音乐人</h3>
-          <p>加几位你喜欢的乐队或音乐人，他们开演出时我们会提醒你。</p>
+          <p>导入一个歌单，我们会从里面认出音乐人，他们开演出时提醒你。</p>
           <div style={{ marginTop: 16 }}>
-            <button className="btn accent" onClick={() => setAdding(true)}>＋ 添加音乐人</button>
+            <ImportPlaylist token={token} config={config} onImported={onImported} />
           </div>
         </div>
       </section>
@@ -368,19 +347,6 @@ function ArtistsTab({
   return (
     <section className="rise">
       <ImportPlaylist token={token} config={config} onImported={onImported} />
-      {adding && (
-        <div className="inline-add pop-in" style={{ marginBottom: 14 }}>
-          <input
-            className="input"
-            autoFocus
-            value={v}
-            onChange={(e) => setV(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submit()}
-            placeholder="音乐人名称"
-          />
-          <button className="btn accent" onClick={submit} disabled={!v.trim()}>添加</button>
-        </div>
-      )}
       <div className="artist-wall">
         {artists.map((a) => (
           <div key={a.id} className="artist-tile">
@@ -396,12 +362,6 @@ function ArtistsTab({
             <span className="artist-tile-name">{a.name}</span>
           </div>
         ))}
-        {!adding && (
-          <button className="add-tile" onClick={() => setAdding(true)}>
-            <span className="plus">＋</span>
-            添加
-          </button>
-        )}
       </div>
     </section>
   );

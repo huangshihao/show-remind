@@ -501,16 +501,6 @@ button { font-family: inherit; }
 @media (hover: none) { .artist-tile-remove { opacity: 1; } }
 .artist-tile-remove:hover { background: var(--coral); }
 
-.add-tile {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; aspect-ratio: 1; border-radius: var(--radius);
-  border: 1.5px dashed var(--line-strong); background: transparent;
-  color: var(--ink-soft); cursor: pointer; font-weight: 700; font-size: 13px;
-  transition: background 0.12s, color 0.12s;
-}
-.add-tile:hover { background: var(--surface); color: var(--ink); }
-.add-tile .plus { font-size: 24px; line-height: 1; }
-
 /* ---- Manage: ticket-stub show cards -------------------------------------- */
 
 .shows { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px; }
