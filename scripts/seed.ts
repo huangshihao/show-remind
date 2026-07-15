@@ -8,8 +8,9 @@
 // limits (50 external subrequests, 15-min cron wall, 10ms CPU), so the whole
 // country can be filled in one pass.
 //
-// Safe to re-run and safe to interrupt: it only fetches details for shows whose
-// showstart_id is not already in D1, so a rerun resumes where it stopped.
+// Safe to re-run and safe to interrupt: each city is written as soon as it is
+// crawled, and only shows whose showstart_id is not already in D1 are fetched, so
+// a rerun resumes at the first unfinished city rather than redoing the work.
 //
 //   mise x node@22 -- npx vite-node scripts/seed.ts -- --dry-run
 //   mise x node@22 -- npx vite-node scripts/seed.ts -- --cities=310000,420100
@@ -119,6 +120,20 @@ async function fetchDetails(ids: string[], label: string): Promise<ShowDetail[]>
   return out;
 }
 
+function showsSql(rows: Array<ShowDetail & { rowId: string }>): string {
+  return rows
+    .map(
+      (s) =>
+        `INSERT INTO shows (id, showstart_id, title, city_code, venue, show_time, price, url, performers, poster) ` +
+        `VALUES (${q(s.rowId)}, ${q(s.showstartId)}, ${q(s.title)}, ${q(s.cityCode)}, ${q(s.venue)}, ` +
+        `${q(s.showTime)}, ${q(s.price)}, ${q(s.url)}, ${q(JSON.stringify(s.performers))}, ${q(s.poster)}) ` +
+        `ON CONFLICT(showstart_id) DO UPDATE SET title=excluded.title, city_code=excluded.city_code, ` +
+        `venue=excluded.venue, show_time=excluded.show_time, price=excluded.price, url=excluded.url, ` +
+        `performers=excluded.performers, poster=excluded.poster;`,
+    )
+    .join("\n");
+}
+
 // --- main -------------------------------------------------------------------
 
 async function main() {
@@ -130,42 +145,34 @@ async function main() {
   );
   console.log(`   ${known.size} shows already stored\n`);
 
+  // Write after EACH city, not once at the end. A single write at the end means an
+  // interrupted run throws away everything it crawled — which is exactly what
+  // happened on the first 30-city attempt (391 北京 details, discarded on exit).
   console.log("2. Crawling…");
-  const fresh: Array<ShowDetail & { rowId: string }> = [];
+  let written = 0;
   for (const city of targets) {
     const listed = await listCity(city.code, city.name);
     const unseen = listed.filter((id) => !known.has(id)).slice(0, LIMIT);
     if (unseen.length === 0) {
-      console.log(`   ${city.name}: nothing new`);
+      console.log(`   ${city.name}: nothing new\n`);
       continue;
     }
     const details = await fetchDetails(unseen, city.name);
-    for (const d of details) {
-      // Showstart's detail API omits cityId; fall back to the city we asked for,
-      // exactly as src/pipeline/crawl.ts does.
-      fresh.push({ ...d, cityCode: d.cityCode || city.code, rowId: randomUUID() });
-    }
-    console.log(`   ${city.name}: +${details.length} new\n`);
+    if (details.length === 0) continue;
+    // Showstart's detail API omits cityId; fall back to the city we asked for,
+    // exactly as src/pipeline/crawl.ts does.
+    const rows = details.map((d) => ({ ...d, cityCode: d.cityCode || city.code, rowId: randomUUID() }));
+    d1ExecFile(showsSql(rows));
+    written += rows.length;
+    for (const r of rows) known.add(r.showstartId);
+    console.log(`   ${city.name}: +${rows.length} written\n`);
   }
 
-  if (fresh.length === 0) {
+  if (written === 0) {
     console.log("Nothing new to write. Done.");
     return;
   }
-
-  console.log(`3. Writing ${fresh.length} shows to D1…`);
-  const showSql = fresh
-    .map(
-      (s) =>
-        `INSERT INTO shows (id, showstart_id, title, city_code, venue, show_time, price, url, performers, poster) ` +
-        `VALUES (${q(s.rowId)}, ${q(s.showstartId)}, ${q(s.title)}, ${q(s.cityCode)}, ${q(s.venue)}, ` +
-        `${q(s.showTime)}, ${q(s.price)}, ${q(s.url)}, ${q(JSON.stringify(s.performers))}, ${q(s.poster)}) ` +
-        `ON CONFLICT(showstart_id) DO UPDATE SET title=excluded.title, city_code=excluded.city_code, ` +
-        `venue=excluded.venue, show_time=excluded.show_time, price=excluded.price, url=excluded.url, ` +
-        `performers=excluded.performers, poster=excluded.poster;`,
-    )
-    .join("\n");
-  d1ExecFile(showSql);
+  console.log(`3. Wrote ${written} shows.`);
 
   // Re-match from scratch against what D1 actually holds. Reading the ids back
   // (rather than trusting the ones we just generated) keeps this correct even if a
