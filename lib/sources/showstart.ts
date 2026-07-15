@@ -63,6 +63,23 @@ export function normalizeShowTime(raw: string | null | undefined): string | null
   return `${y}-${pad(mo)}-${pad(d)}T${pad(h)}:${mi}:00`;
 }
 
+// Showstart's epoch-ms fields are the authoritative instant; showTime is only a
+// display string. Prefer the epoch: a multi-day event's showTime is a RANGE
+// ("2026.05.01－05.04") that carries no clock time and cannot be parsed at all,
+// which used to yield NULL — and NULL was read as "date unknown, so upcoming",
+// leaving finished festivals on the page for months.
+//
+// Emitted as Beijing wall-clock (the venue's own timezone), matching what the
+// site displays and what the UI renders verbatim. Done by offsetting rather than
+// via Intl: China has had a single UTC+8 offset with no DST since 1991, so the
+// arithmetic is exact and does not depend on the runtime's ICU data.
+const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+export function showTimeFromEpoch(epochMs: unknown): string | null {
+  if (typeof epochMs !== "number" || !Number.isFinite(epochMs) || epochMs <= 0) return null;
+  return new Date(epochMs + BEIJING_OFFSET_MS).toISOString().slice(0, 19);
+}
+
 export interface ShowSummary {
   showstartId: string;
   title: string;
@@ -225,7 +242,7 @@ export function transformShowList(raw: any, cityCode: string): { shows: ShowSumm
       showstartId: id,
       title: row?.title ?? "",
       cityCode: String(row?.cityId ?? cityCode),
-      showTime: normalizeShowTime(row?.showTime),
+      showTime: showTimeFromEpoch(row?.showStartTime) ?? normalizeShowTime(row?.showTime),
       url: detailUrl(id),
       poster: row?.avatar ?? null,
     });
@@ -268,7 +285,7 @@ export function transformShowDetail(raw: any): ShowDetail {
     title: result?.title ?? result?.activityName ?? "",
     cityCode: String(result?.cityId ?? ""),
     venue: detailVenue(result),
-    showTime: normalizeShowTime(result?.showTime),
+    showTime: showTimeFromEpoch(result?.showStartTime) ?? normalizeShowTime(result?.showTime),
     price: price != null && price !== "" ? String(price) : null,
     url: detailUrl(id),
     performers: detailPerformers(result),

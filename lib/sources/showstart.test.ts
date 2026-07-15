@@ -144,6 +144,32 @@ describe("transformShowDetail", () => {
     const d = transformShowDetail(DETAIL_RAW);
     expect(d.performers).toEqual(["尹毓恪", "特邀嘉宾"]);
   });
+  // Real payload for Fjaka Festival (activityId 295517), a festival that ran
+  // 2026-05-01..05-04. Its showTime is a date RANGE with no clock time, which the
+  // display-string regex cannot parse — so it was stored as NULL, and NULL was
+  // treated as "date unknown, therefore upcoming". The festival then showed as
+  // upcoming for months after it had ended. showStartTime carried the real
+  // instant the whole time.
+  it("takes the show time from showStartTime, not the display string", () => {
+    const d = transformShowDetail({
+      result: {
+        activityId: 295517,
+        title: "Fjaka Festival音乐生活节-武汉麓客岛",
+        showTime: "2026.05.01－05.04", // a range: unparseable, and not the point
+        showStartTime: 1777615200000, // 2026-05-01 14:00 Beijing
+        showEndTime: 1777903200000,
+      },
+    });
+    expect(d.showTime).toBe("2026-05-01T14:00:00");
+  });
+
+  it("falls back to the display string when showStartTime is absent", () => {
+    const d = transformShowDetail({
+      result: { activityId: 1, title: "x", showTime: "2026.07.12 本周日 20:00" },
+    });
+    expect(d.showTime).toBe("2026-07-12T20:00:00");
+  });
+
   it("maps venue / price / showTime / id", () => {
     const d = transformShowDetail(DETAIL_RAW);
     expect(d.showstartId).toBe("299995");
