@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { clearToken, storeToken } from "./session";
-import { getConfig, setManageCities, type Config } from "./api";
+import { getConfig, importPlaylist, setManageCities, type Config } from "./api";
 import { ArtistAvatar } from "./ArtistAvatar";
 import { Shell, Loading } from "./Shell";
+import { Turnstile } from "./Turnstile";
 
 interface UpcomingShow {
   id: string;
@@ -166,7 +167,14 @@ export function Manage({ token }: { token: string }) {
       </div>
 
       {tab === 0 ? (
-        <ArtistsTab artists={view.artists} onAdd={addArtist} onRemove={removeArtist} />
+        <ArtistsTab
+          artists={view.artists}
+          token={token}
+          config={config}
+          onImported={reload}
+          onAdd={addArtist}
+          onRemove={removeArtist}
+        />
       ) : (
         <ShowsTab shows={view.shows} />
       )}
@@ -260,12 +268,76 @@ function CitiesRow({
   );
 }
 
+export function ImportPlaylist({
+  token,
+  config,
+  onImported,
+}: {
+  token: string;
+  config: Config | null;
+  onImported: (artists: { id: string; name: string }[]) => void;
+}) {
+  const [link, setLink] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [done, setDone] = useState("");
+  const [tsToken, setTsToken] = useState("");
+
+  async function submit() {
+    const v = link.trim();
+    if (!v || busy) return;
+    setBusy(true);
+    setErr("");
+    setDone("");
+    try {
+      const res = await importPlaylist(v, token, tsToken || undefined);
+      setDone(`新增 ${res.added} 位音乐人`);
+      setLink("");
+      onImported(res.artists);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div className="inline-add">
+        <input
+          className="input"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          placeholder="粘贴另一个歌单链接，继续添加音乐人"
+        />
+        <button className="btn accent" onClick={submit} disabled={!link.trim() || busy}>
+          {busy ? "导入中…" : "导入"}
+        </button>
+      </div>
+      {config?.publicMode && (
+        <div style={{ marginTop: 12 }}>
+          <Turnstile siteKey={config.turnstileSiteKey} onToken={setTsToken} />
+        </div>
+      )}
+      {done && <p className="hint">{done}</p>}
+      {err && <p className="error">{err}</p>}
+    </div>
+  );
+}
+
 function ArtistsTab({
   artists,
+  token,
+  config,
+  onImported,
   onAdd,
   onRemove,
 }: {
   artists: View["artists"];
+  token: string;
+  config: Config | null;
+  onImported: () => void;
   onAdd: (name: string) => void;
   onRemove: (id: string) => void;
 }) {
@@ -295,6 +367,7 @@ function ArtistsTab({
 
   return (
     <section className="rise">
+      <ImportPlaylist token={token} config={config} onImported={onImported} />
       {adding && (
         <div className="inline-add pop-in" style={{ marginBottom: 14 }}>
           <input
