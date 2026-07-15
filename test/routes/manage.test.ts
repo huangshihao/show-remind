@@ -220,3 +220,52 @@ it("import only counts newly-linked artists toward added/cap, not already-follow
 
   vi.unstubAllGlobals();
 });
+
+it("importing a second, different playlist merges and dedupes across playlists", async () => {
+  const sub = await activeSub();
+  const before = (await listArtists(env.DB, sub.id)).length;
+
+  function qqList(title: string, names: string[]) {
+    return new Response(
+      JSON.stringify({
+        request: {
+          code: 0,
+          data: {
+            dirinfo: { title },
+            songlist_size: names.length,
+            songlist: names.map((n, i) => ({ name: `s${i}`, singer: [{ name: n }] })),
+          },
+        },
+      }),
+    );
+  }
+
+  // 歌单 A：痛仰乐队 + 海龟先生
+  vi.stubGlobal("fetch", vi.fn(async () => qqList("A", ["痛仰乐队", "海龟先生"])));
+  const a = await app.request(
+    `/api/manage/import?token=${sub.token}`,
+    j({ link: "https://y.qq.com/n/ryqq/playlist/1" }),
+    env,
+  );
+  expect(((await a.json()) as any).added).toBe(2);
+
+  // 歌单 B：海龟先生（与 A 重叠）+ 达达乐队（新）
+  vi.stubGlobal("fetch", vi.fn(async () => qqList("B", ["海龟先生", "达达乐队"])));
+  const b = await app.request(
+    `/api/manage/import?token=${sub.token}`,
+    j({ link: "https://y.qq.com/n/ryqq/playlist/2" }),
+    env,
+  );
+  // 只有达达乐队是新的；海龟先生已被 A 带进来了
+  expect(((await b.json()) as any).added).toBe(1);
+
+  const names = (await listArtists(env.DB, sub.id)).map((x) => x.name);
+  expect(names).toContain("痛仰乐队");
+  expect(names).toContain("海龟先生");
+  expect(names).toContain("达达乐队");
+  // 重叠的海龟先生只有一条，没有变成两行
+  expect(names.filter((n) => n === "海龟先生").length).toBe(1);
+  expect(names.length).toBe(before + 3);
+
+  vi.unstubAllGlobals();
+});
