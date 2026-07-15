@@ -8,6 +8,9 @@ export interface UpcomingShow {
   price: string | null;
   url: string;
   artistNames: string[];
+  // Whether a reminder email for this show has already gone out to THIS
+  // subscription, so the page can mark it rather than look like it never fired.
+  notified: boolean;
 }
 
 interface JoinRow {
@@ -21,6 +24,7 @@ interface JoinRow {
   poster: string | null;
   first_seen_at: string;
   artist_name: string;
+  notified: number;
 }
 
 const UPCOMING_SHOWS_LIMIT = 20;
@@ -44,7 +48,11 @@ export async function findUpcomingShowsForSubscription(
   const { results } = await db
     .prepare(
       `SELECT sh.id AS show_id, sh.title, sh.city_code, sh.venue, sh.show_time, sh.price, sh.url,
-              sh.poster, sh.first_seen_at, a.name AS artist_name
+              sh.poster, sh.first_seen_at, a.name AS artist_name,
+              EXISTS (
+                SELECT 1 FROM notifications n
+                WHERE n.subscription_id = sa.subscription_id AND n.show_id = sh.id
+              ) AS notified
        FROM subscription_artists sa
        JOIN show_artists xsa ON xsa.artist_id = sa.artist_id
        JOIN shows sh ON sh.id = xsa.show_id
@@ -73,6 +81,7 @@ export async function findUpcomingShowsForSubscription(
         price: r.price,
         url: r.url,
         artistNames: [],
+        notified: r.notified === 1,
         firstSeenAt: r.first_seen_at,
       };
       byShow.set(r.show_id, show);

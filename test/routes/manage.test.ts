@@ -63,6 +63,7 @@ it("GET manage includes upcoming shows for the subscription's followed artists",
       price: "180",
       url: "https://x/900",
       artistNames: ["刺猬"],
+      notified: false,
     },
   ]);
 });

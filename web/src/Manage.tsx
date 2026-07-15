@@ -14,6 +14,7 @@ interface UpcomingShow {
   price: string | null;
   url: string;
   artistNames: string[];
+  notified: boolean;
 }
 
 interface View {
@@ -366,6 +367,9 @@ function ShowsTab({ shows }: { shows: UpcomingShow[] }) {
                 {s.poster && <img className="poster" src={posterThumb(s.poster)} alt="" loading="lazy" />}
                 <div className="meta">
                   <p className="t-title">{s.title}</p>
+                  {s.notified && (
+                    <span className="sent-tag" title="已通过邮件提醒过你这场演出">✓ 已提醒</span>
+                  )}
                   <p className="t-artists">
                     {s.artistNames.map((n, i) => (
                       <span key={n}>

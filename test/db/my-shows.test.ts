@@ -6,6 +6,7 @@ import { addArtistToSubscription } from "../../src/db/subscription-artists";
 import { upsertShow } from "../../src/db/shows";
 import { persistMatches } from "../../src/db/show-artists";
 import { findUpcomingShowsForSubscription } from "../../src/db/my-shows";
+import { markSent } from "../../src/db/notifications";
 
 beforeEach(applySchema);
 const db = () => env.DB;
@@ -37,7 +38,32 @@ it("returns an upcoming show in the sub's city with its poster and artist names"
     price: "180",
     url: "https://x/100",
     artistNames: ["刺猬"],
+    notified: false,
   });
+});
+
+// The manage page should say which shows have already gone out by email, so a
+// reminder in the inbox and the row on the page are recognisably the same thing.
+it("marks a show that has already been emailed", async () => {
+  const { sub, show } = await setup();
+  await markSent(db(), sub.id, [show.id]);
+
+  const shows = await findUpcomingShowsForSubscription(db(), sub.id);
+
+  expect(shows[0].notified).toBe(true);
+});
+
+it("does not mark another subscription's reminder as this one's", async () => {
+  const { sub, show, artistId } = await setup();
+  const other = await createPendingSubscription(db(), "other@b.com", ["110000"]);
+  await activateByToken(db(), other.token);
+  await addArtistToSubscription(db(), other.id, "刺猬");
+  await persistMatches(db(), [{ showId: show.id, artistId, matchedBy: "performer" }]);
+  await markSent(db(), other.id, [show.id]); // emailed to the OTHER subscriber
+
+  const shows = await findUpcomingShowsForSubscription(db(), sub.id);
+
+  expect(shows[0].notified).toBe(false);
 });
 
 it("includes a show with a null show_time (undated / TBD)", async () => {
