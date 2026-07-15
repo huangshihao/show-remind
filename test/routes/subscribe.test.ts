@@ -54,6 +54,30 @@ it("re-subscribing a PENDING email merges artists instead of wiping the earlier 
   expect(names).toEqual(["刺猬", "海龟先生", "达达"].sort());
 });
 
+it("self-host (PUBLIC_MODE=0) keeps every artist — no silent cap", async () => {
+  // A real 282-artist playlist import used to stop at MAX_ARTISTS and drop the
+  // rest without a word. The cap is public-mode abuse protection; self-host has none.
+  const artists = Array.from({ length: 120 }, (_, i) => `艺人${i}`);
+  const res = await subscribe({ email: "a@b.com", cities: ["110000"], artists });
+  expect(res.status).toBe(200);
+  const sub = await getByEmail(env.DB, "a@b.com");
+  expect((await listArtists(env.DB, sub!.id)).length).toBe(120);
+});
+
+it("PUBLIC_MODE=1 still rejects an over-cap list outright", async () => {
+  const artists = Array.from({ length: 120 }, (_, i) => `艺人${i}`);
+  const res = await app.request(
+    "/api/subscribe",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "a@b.com", cities: ["110000"], artists, turnstileToken: "tok" }),
+    },
+    { ...env, PUBLIC_MODE: "1" },
+  );
+  expect(res.status).toBe(400);
+});
+
 it("subscribing links the new artists to already-crawled upcoming shows", async () => {
   const show = await upsertShow(env.DB, {
     showstartId: "800", title: "刺猬夏日专场", cityCode: "110000", venue: "MAO",

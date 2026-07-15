@@ -136,7 +136,9 @@ manageRouter.post("/import", async (c) => {
   } catch {
     return c.json({ error: "歌单解析失败，请稍后重试或手动添加" }, 502);
   }
-  const cap = MAX_ARTISTS - (await countArtists(c.env.DB, sub.id));
+  // Public-mode abuse protection only — self-host imports the whole playlist.
+  const cap =
+    c.env.PUBLIC_MODE === "1" ? MAX_ARTISTS - (await countArtists(c.env.DB, sub.id)) : Infinity;
   let added = 0;
   const newArtistIds: string[] = [];
   for (const a of resolved.artists) {
