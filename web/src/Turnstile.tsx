@@ -2,6 +2,11 @@ import { useEffect, useRef } from "react";
 
 // Renders the Turnstile widget only when a site key is provided. The widget
 // script is loaded on demand. onToken fires with the solved token.
+//
+// appearance: "interaction-only" — the check runs invisibly in the background
+// and the widget only materializes for traffic Cloudflare wants to challenge
+// interactively. Normal humans never see a box; the submit button simply
+// becomes usable once onToken fires.
 export function Turnstile({ siteKey, onToken }: { siteKey: string; onToken: (t: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -9,7 +14,12 @@ export function Turnstile({ siteKey, onToken }: { siteKey: string; onToken: (t: 
     const id = "cf-turnstile-script";
     function render() {
       const w = (window as any).turnstile;
-      if (w && ref.current) w.render(ref.current, { sitekey: siteKey, callback: onToken });
+      if (w && ref.current)
+        w.render(ref.current, {
+          sitekey: siteKey,
+          callback: onToken,
+          appearance: "interaction-only",
+        });
     }
     if (!document.getElementById(id)) {
       const s = document.createElement("script");
