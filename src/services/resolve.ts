@@ -1,42 +1,49 @@
 import { parsePlaylistLink } from "@/lib/adapters/parse-link";
-import { resolveNeteasePlaylist } from "@/lib/adapters/netease";
+import { resolveNeteasePlaylist, fetchArtistAvatar } from "@/lib/adapters/netease";
 import { fetchQqPlaylist } from "@/lib/sources/qq";
 import { tallyArtists } from "@/lib/adapters/tally";
 import type { ArtistTally, ResolvedPlaylist } from "@/lib/adapters/types";
-import { searchArtist } from "@/lib/sources/showstart";
 
 async function resolveQq(externalId: string): Promise<ResolvedPlaylist> {
   const { title, songs } = await fetchQqPlaylist(externalId);
   return { platform: "qq", externalId, title, songs };
 }
 
+// Avatars come from the playlist platform itself. QQ carries them inline
+// (singer mid → photo URL, zero extra requests); netease song payloads only
+// carry artist ids, so those need one head-info lookup per artist.
+//
 // Workers caps a single invocation at 50 subrequests, and the playlist fetch
-// itself already spends some of that budget (QQ pagination alone can run up
-// to MAX_PAGES=60 requests for a huge list; a large Netease playlist is
-// ~1+ceil(N/500)). So avatar lookups are capped well under 50 — any artist
-// past the cap, or whose lookup fails or times out, simply keeps
-// avatar: null. That's graceful degradation, never a resolve failure.
+// itself already spends some of that budget (a large netease playlist is
+// ~1+ceil(N/500) requests). So netease lookups are capped well under 50 — any
+// artist past the cap, or whose lookup fails or times out, simply keeps
+// avatar: null and gets backfilled later (see src/routes/manage.ts). That's
+// graceful degradation, never a resolve failure.
 const AVATAR_LOOKUP_LIMIT = 30;
-// One slow Showstart search shouldn't hang the whole resolve response.
+// One slow netease lookup shouldn't hang the whole resolve response.
 const AVATAR_LOOKUP_TIMEOUT_MS = 4000;
 
-function searchArtistWithTimeout(name: string): Promise<Awaited<ReturnType<typeof searchArtist>>> {
+// Soft timeout: resolves null on timeout OR error. Unlike the manage-page
+// backfill (which must distinguish "no match" from "lookup failed" before
+// caching ""), the resolve preview never caches — null just means "no avatar
+// in this response", so collapsing failures into null is safe here.
+function avatarWithTimeout(sourceId: string): Promise<string | null> {
   let timer!: ReturnType<typeof setTimeout>;
   const timeout = new Promise<null>((resolve) => {
     timer = setTimeout(() => resolve(null), AVATAR_LOOKUP_TIMEOUT_MS);
   });
-  return Promise.race([searchArtist(name), timeout]).finally(() => clearTimeout(timer));
+  return Promise.race([fetchArtistAvatar(sourceId).catch(() => null), timeout]).finally(() =>
+    clearTimeout(timer),
+  );
 }
 
-async function attachAvatars(artists: ArtistTally[]): Promise<ArtistTally[]> {
-  const toLookup = artists.slice(0, AVATAR_LOOKUP_LIMIT);
+async function attachNeteaseAvatars(artists: ArtistTally[]): Promise<void> {
+  const pending = artists.filter((a) => !a.avatar && a.sourceId).slice(0, AVATAR_LOOKUP_LIMIT);
   await Promise.all(
-    toLookup.map(async (artist) => {
-      const hit = await searchArtistWithTimeout(artist.name);
-      artist.avatar = hit?.avatar ?? null;
+    pending.map(async (artist) => {
+      artist.avatar = await avatarWithTimeout(artist.sourceId!);
     }),
   );
-  return artists;
 }
 
 export async function resolvePlaylist(
@@ -47,6 +54,16 @@ export async function resolvePlaylist(
     parsed.platform === "netease"
       ? await resolveNeteasePlaylist(parsed.externalId)
       : await resolveQq(parsed.externalId);
-  const artists = await attachAvatars(tallyArtists(playlist));
-  return { platform: parsed.platform, title: playlist.title, artists };
+  const artists = tallyArtists(playlist);
+  if (parsed.platform === "netease") await attachNeteaseAvatars(artists);
+  // Public shape: every artist gets an explicit avatar (null when unknown);
+  // sourceId is a lookup-time detail, not part of the API response.
+  return {
+    platform: parsed.platform,
+    title: playlist.title,
+    artists: artists.map(({ sourceId: _sourceId, avatar, ...rest }) => ({
+      ...rest,
+      avatar: avatar ?? null,
+    })),
+  };
 }

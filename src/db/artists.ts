@@ -28,19 +28,34 @@ function toRow(r: RawRow): ArtistRow {
   };
 }
 
-export async function upsertArtist(db: D1Database, name: string): Promise<ArtistRow> {
+// `avatar` (when given) is a playlist-sourced photo URL: stored on insert, and
+// used to heal an existing row whose avatar is null (never looked up) or ""
+// (Showstart search came up empty). A real avatar already on the row wins —
+// this never overwrites one URL with another.
+export async function upsertArtist(
+  db: D1Database,
+  name: string,
+  avatar?: string | null,
+): Promise<ArtistRow> {
   const normalized = normalizeName(name);
   const existing = await db
     .prepare("SELECT * FROM artists WHERE normalized_name = ?")
     .bind(normalized)
     .first<RawRow>();
-  if (existing) return toRow(existing);
+  if (existing) {
+    const row = toRow(existing);
+    if (avatar && !row.avatar) {
+      await setArtistAvatar(db, row.id, avatar);
+      row.avatar = avatar;
+    }
+    return row;
+  }
   const id = newId();
   await db
-    .prepare("INSERT INTO artists (id, name, normalized_name, aliases) VALUES (?, ?, ?, '[]')")
-    .bind(id, name, normalized)
+    .prepare("INSERT INTO artists (id, name, normalized_name, aliases, avatar) VALUES (?, ?, ?, '[]', ?)")
+    .bind(id, name, normalized, avatar ?? null)
     .run();
-  return { id, name, normalizedName: normalized, aliases: [], avatar: null };
+  return { id, name, normalizedName: normalized, aliases: [], avatar: avatar ?? null };
 }
 
 export async function getAllArtists(db: D1Database): Promise<ArtistRow[]> {

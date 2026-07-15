@@ -23,6 +23,36 @@ it("new artists start with avatar null; setArtistAvatar persists a url or empty 
   expect((await getAllArtists(db()))[0].avatar).toBe("");
 });
 
+it("upsertArtist persists a playlist-sourced avatar on insert", async () => {
+  const a = await upsertArtist(db(), "刺猬", "https://y.qq.com/music/photo_new/x.jpg");
+  expect(a.avatar).toBe("https://y.qq.com/music/photo_new/x.jpg");
+  expect((await getAllArtists(db()))[0].avatar).toBe("https://y.qq.com/music/photo_new/x.jpg");
+});
+
+it("upsertArtist heals an existing avatar-less row (null or searched-empty), but never overwrites a real avatar", async () => {
+  // null (never looked up) gets healed
+  const a = await upsertArtist(db(), "刺猬");
+  const healedFromNull = await upsertArtist(db(), "刺猬", "https://img/1.jpg");
+  expect(healedFromNull.id).toBe(a.id);
+  expect(healedFromNull.avatar).toBe("https://img/1.jpg");
+  expect((await getAllArtists(db()))[0].avatar).toBe("https://img/1.jpg");
+
+  // an existing real avatar is NOT replaced by a different incoming one
+  const kept = await upsertArtist(db(), "刺猬", "https://img/2.jpg");
+  expect(kept.avatar).toBe("https://img/1.jpg");
+
+  // "" (searched, Showstart had no match) also gets healed — the playlist
+  // source knows this artist even though Showstart didn't
+  const b = await upsertArtist(db(), "海龟先生");
+  await setArtistAvatar(db(), b.id, "");
+  const healedFromEmpty = await upsertArtist(db(), "海龟先生", "https://img/3.jpg");
+  expect(healedFromEmpty.avatar).toBe("https://img/3.jpg");
+
+  // and no incoming avatar leaves the row untouched
+  const untouched = await upsertArtist(db(), "刺猬");
+  expect(untouched.avatar).toBe("https://img/1.jpg");
+});
+
 it("treats case/whitespace variants as the same artist", async () => {
   // normalizeName lowercases + collapses whitespace (it does NOT strip
   // hyphens), so these two spellings normalize to the same key.

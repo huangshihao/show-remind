@@ -75,13 +75,20 @@ manageRouter.get("/", async (c) => {
   const sub = await requireSub(c);
   if (!sub) return c.notFound();
   const artists = await listArtists(c.env.DB, sub.id);
-  await backfillAvatars(c.env.DB, artists);
+  // Snapshot the response view BEFORE kicking off the backfill: backfill
+  // mutates `artists` rows as lookups land, and the response must reflect
+  // what the DB held at read time, not a race with the background writes.
+  // "" (searched-empty) collapses to null so the frontend shows a placeholder.
+  const artistsView = artists.map((a) => ({ id: a.id, name: a.name, avatar: a.avatar || null }));
+  // Off the response path: Showstart lookups (up to 15 × 4s) used to gate the
+  // whole page load. waitUntil lets the response return now; freshly found
+  // avatars show up on the next load.
+  c.executionCtx.waitUntil(backfillAvatars(c.env.DB, artists));
   const shows = await findUpcomingShowsForSubscription(c.env.DB, sub.id);
   return c.json({
     email: sub.email,
     cities: sub.cities,
-    // "" (searched-empty) collapses to null so the frontend shows a placeholder.
-    artists: artists.map((a) => ({ id: a.id, name: a.name, avatar: a.avatar || null })),
+    artists: artistsView,
     shows,
   });
 });
@@ -129,7 +136,12 @@ manageRouter.post("/import", async (c) => {
   const newArtistIds: string[] = [];
   for (const a of resolved.artists) {
     if (added >= cap) break;
-    const { artistId, inserted } = await addArtistReturningInserted(c.env.DB, sub.id, a.name);
+    const { artistId, inserted } = await addArtistReturningInserted(
+      c.env.DB,
+      sub.id,
+      a.name,
+      a.avatar,
+    );
     if (inserted) {
       added++;
       newArtistIds.push(artistId);

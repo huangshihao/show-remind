@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { env } from "cloudflare:test";
+import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { applySchema } from "../db/apply-schema";
 import { app } from "../../src/index";
 import { createPendingSubscription, activateByToken } from "../../src/db/subscriptions";
@@ -31,7 +31,7 @@ const j = (body: unknown) => ({
 
 it("GET manage returns the subscription view, including upcoming shows", async () => {
   const sub = await activeSub();
-  const res = await app.request(`/api/manage?token=${sub.token}`, {}, env);
+  const res = await app.request(`/api/manage?token=${sub.token}`, {}, env, createExecutionContext());
   expect(res.status).toBe(200);
   const body = (await res.json()) as any;
   expect(body.email).toBe("a@b.com");
@@ -50,7 +50,7 @@ it("GET manage includes upcoming shows for the subscription's followed artists",
   });
   await persistMatches(env.DB, [{ showId: show.id, artistId: artists[0].id, matchedBy: "performer" }]);
 
-  const res = await app.request(`/api/manage?token=${sub.token}`, {}, env);
+  const res = await app.request(`/api/manage?token=${sub.token}`, {}, env, createExecutionContext());
   const body = (await res.json()) as any;
   expect(body.shows).toEqual([
     {
@@ -68,7 +68,7 @@ it("GET manage includes upcoming shows for the subscription's followed artists",
   ]);
 });
 
-it("GET manage backfills avatars from Showstart and caches them (no re-search)", async () => {
+it("GET manage backfills avatars in the background (waitUntil) and caches them (no re-search)", async () => {
   const sub = await createPendingSubscription(env.DB, "c@d.com", ["110000"]);
   await activateByToken(env.DB, sub.token);
   await setArtists(env.DB, sub.id, ["刺猬", "海龟先生"]);
@@ -83,21 +83,29 @@ it("GET manage backfills avatars from Showstart and caches them (no re-search)",
   const byName = (body: any) =>
     Object.fromEntries(body.artists.map((a: any) => [a.name, a.avatar]));
 
-  const first = await app.request(`/api/manage?token=${sub.token}`, {}, env);
+  // First load answers immediately from the DB (avatars still null); the
+  // Showstart lookups run in the background via waitUntil, not on the
+  // response path.
+  const ctx1 = createExecutionContext();
+  const first = await app.request(`/api/manage?token=${sub.token}`, {}, env, ctx1);
   expect(first.status).toBe(200);
-  expect(byName(await first.json())).toEqual({ 刺猬: AVATAR, 海龟先生: null });
-  // One lookup per never-searched artist.
+  expect(byName(await first.json())).toEqual({ 刺猬: null, 海龟先生: null });
+  await waitOnExecutionContext(ctx1);
+  // One background lookup per never-searched artist.
   expect(spy).toHaveBeenCalledTimes(2);
 
-  // Second load: 刺猬 is now a cached URL, 海龟先生 a cached "" (searched-empty).
-  // Neither is null anymore, so no further searches fire.
-  const second = await app.request(`/api/manage?token=${sub.token}`, {}, env);
+  // Second load: 刺猬 is now a cached URL, 海龟先生 a cached "" (searched-empty,
+  // collapsed to null in the response). Neither is null in the DB anymore, so
+  // no further searches fire.
+  const ctx2 = createExecutionContext();
+  const second = await app.request(`/api/manage?token=${sub.token}`, {}, env, ctx2);
   expect(second.status).toBe(200);
   expect(byName(await second.json())).toEqual({ 刺猬: AVATAR, 海龟先生: null });
+  await waitOnExecutionContext(ctx2);
   expect(spy).toHaveBeenCalledTimes(2);
 });
 
-it("a backfill timeout leaves avatar null, NOT cached as \"\" (so it's retried, not permanently marked no-match)", async () => {
+it("a hung Showstart lookup doesn't delay the response, and leaves avatar null, NOT cached as \"\"", async () => {
   vi.useFakeTimers();
   const sub = await createPendingSubscription(env.DB, "timeout@b.com", ["110000"]);
   await activateByToken(env.DB, sub.token);
@@ -110,21 +118,27 @@ it("a backfill timeout leaves avatar null, NOT cached as \"\" (so it's retried, 
   // re-checking call counts for the second phase.
   const spy = vi.mocked(showstart.searchArtistStrict).mockImplementation(() => new Promise(() => {}));
 
-  const resPromise = app.request(`/api/manage?token=${sub.token}`, {}, env);
-  await vi.advanceTimersByTimeAsync(4000);
-  const res = await resPromise;
+  // The response must resolve WITHOUT advancing the fake clock: the hung
+  // lookup runs in the background, not on the response path.
+  const ctx = createExecutionContext();
+  const res = await app.request(`/api/manage?token=${sub.token}`, {}, env, ctx);
   expect(res.status).toBe(200);
   const body = (await res.json()) as any;
   expect(body.artists.find((a: any) => a.name === "慢艺人").avatar).toBeNull();
   expect(spy).toHaveBeenCalledTimes(1);
+  // Let the background lookup hit its 4s timeout and settle.
+  await vi.advanceTimersByTimeAsync(4000);
+  await waitOnExecutionContext(ctx);
   vi.useRealTimers();
 
   // Prove it wasn't cached as "": a later load with a real (non-hanging)
   // search must re-search this artist, because its avatar is still null.
   spy.mockClear();
   spy.mockResolvedValue(null);
-  const second = await app.request(`/api/manage?token=${sub.token}`, {}, env);
+  const ctx2 = createExecutionContext();
+  const second = await app.request(`/api/manage?token=${sub.token}`, {}, env, ctx2);
   expect(second.status).toBe(200);
+  await waitOnExecutionContext(ctx2);
   expect(spy).toHaveBeenCalledTimes(1);
 });
 
@@ -134,10 +148,14 @@ it("a backfill error (not a timeout) also leaves avatar null, not cached as \"\"
   await setArtists(env.DB, sub.id, ["出错乐队"]);
 
   vi.spyOn(showstart, "searchArtistStrict").mockRejectedValue(new Error("network down"));
-  const res = await app.request(`/api/manage?token=${sub.token}`, {}, env);
+  const ctx = createExecutionContext();
+  const res = await app.request(`/api/manage?token=${sub.token}`, {}, env, ctx);
   expect(res.status).toBe(200);
   const body = (await res.json()) as any;
   expect(body.artists.find((a: any) => a.name === "出错乐队").avatar).toBeNull();
+  await waitOnExecutionContext(ctx);
+  const rows = await listArtists(env.DB, sub.id);
+  expect(rows.find((a) => a.name === "出错乐队")!.avatar).toBeNull();
 });
 
 it("unknown token returns 404 everywhere", async () => {
@@ -176,9 +194,47 @@ it("adding an artist links it to already-crawled upcoming shows", async () => {
     ),
   ));
   await app.request(`/api/manage/import?token=${sub.token}`, j({ link: "https://y.qq.com/n/ryqq/playlist/9" }), env);
-  const res = await app.request(`/api/manage?token=${sub.token}`, {}, env);
+  const res = await app.request(`/api/manage?token=${sub.token}`, {}, env, createExecutionContext());
   const body = (await res.json()) as any;
   expect(body.shows.map((s: any) => s.id)).toEqual([show.id]);
+  vi.unstubAllGlobals();
+});
+
+it("import persists playlist avatars for new artists and heals existing avatar-less ones", async () => {
+  const sub = await activeSub(); // 刺猬 already followed, avatar null
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          request: {
+            code: 0,
+            data: {
+              dirinfo: { title: "L" },
+              songlist_size: 2,
+              songlist: [
+                { name: "s1", singer: [{ name: "刺猬", mid: "002IZbHE0PLcjs" }] },
+                { name: "s2", singer: [{ name: "新乐队", mid: "000NewBand0X" }] },
+              ],
+            },
+          },
+        }),
+      ),
+    ),
+  );
+  const res = await app.request(
+    `/api/manage/import?token=${sub.token}`,
+    j({ link: "https://y.qq.com/n/ryqq/playlist/9" }),
+    env,
+  );
+  expect(res.status).toBe(200);
+  const byName = Object.fromEntries(
+    (await listArtists(env.DB, sub.id)).map((a) => [a.name, a.avatar]),
+  );
+  // new artist inserted with its playlist avatar
+  expect(byName["新乐队"]).toBe("https://y.qq.com/music/photo_new/T001R300x300M000000NewBand0X.jpg");
+  // pre-existing artist without an avatar healed by the re-import
+  expect(byName["刺猬"]).toBe("https://y.qq.com/music/photo_new/T001R300x300M000002IZbHE0PLcjs.jpg");
   vi.unstubAllGlobals();
 });
 

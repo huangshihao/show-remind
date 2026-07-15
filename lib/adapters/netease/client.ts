@@ -39,3 +39,10 @@ export async function fetchSongDetailRaw(trackIds: string[]): Promise<any> {
   const c = JSON.stringify(trackIds.map((id) => ({ id })));
   return post("https://music.163.com/api/v3/song/detail", { c });
 }
+
+// Artist head info by id — the song payloads carry artist ids but no images;
+// this endpoint returns the avatar. Same plaintext /api/ family as the two
+// above, so it works from Cloudflare egress too.
+export async function fetchArtistHeadRaw(artistId: string): Promise<any> {
+  return post(`https://music.163.com/api/artist/head/info/get?id=${encodeURIComponent(artistId)}`, {});
+}

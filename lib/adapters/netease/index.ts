@@ -1,5 +1,5 @@
-import type { ResolvedPlaylist, ResolvedSong } from "@/lib/adapters/types";
-import { fetchPlaylistDetailRaw, fetchSongDetailRaw } from "./client";
+import type { ResolvedPlaylist, ResolvedSong, ResolvedSongArtist } from "@/lib/adapters/types";
+import { fetchPlaylistDetailRaw, fetchSongDetailRaw, fetchArtistHeadRaw } from "./client";
 
 const BATCH_SIZE = 500;
 
@@ -12,8 +12,27 @@ export function parsePlaylistMeta(raw: any): { title: string; trackIds: string[]
 export function parseSongDetail(raw: any): ResolvedSong[] {
   return (raw?.songs ?? []).map((s: any) => ({
     name: s.name ?? "",
-    artists: (s.ar ?? s.artists ?? []).map((a: any) => a.name).filter(Boolean),
+    artists: (s.ar ?? s.artists ?? [])
+      .filter((a: any) => Boolean(a?.name))
+      .map((a: any): ResolvedSongArtist =>
+        a.id ? { name: a.name, sourceId: String(a.id) } : { name: a.name },
+      ),
   }));
+}
+
+// head-info payloads carry `avatar` (and sometimes only `cover`) as http://
+// URLs; the SPA is served over https, so an http image would be blocked as
+// mixed content. The 126.net image CDN serves the same path over https.
+export function parseArtistAvatar(raw: any): string | null {
+  const artist = raw?.data?.artist ?? {};
+  const url = artist.avatar || artist.cover;
+  return url ? String(url).replace(/^http:\/\//, "https://") : null;
+}
+
+// Throws on network/parse failure (caller decides whether that means retry
+// later); resolves null only on a definitive "no avatar on the profile".
+export async function fetchArtistAvatar(artistId: string): Promise<string | null> {
+  return parseArtistAvatar(await fetchArtistHeadRaw(artistId));
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {

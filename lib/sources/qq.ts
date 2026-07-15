@@ -11,9 +11,13 @@ const MUSICU_URL = "https://u.y.qq.com/cgi-bin/musicu.fcg";
 const PAGE_SIZE = 100;
 const MAX_PAGES = 60; // safety cap: 6000 songs
 
+export interface QqSongArtist {
+  name: string;
+  avatar?: string;
+}
 export interface QqSong {
   name: string;
-  artists: string[];
+  artists: QqSongArtist[];
 }
 export interface QqPlaylist {
   title: string;
@@ -52,12 +56,20 @@ function detailData(raw: any): any {
   return raw?.request?.data ?? {};
 }
 
+// Singer photo by mid, same URL scheme the QQ Music web player uses. R300x300
+// is a server-side resize; the origin returns image/jpeg for any valid mid.
+function singerAvatarUrl(mid: string): string {
+  return `https://y.qq.com/music/photo_new/T001R300x300M000${mid}.jpg`;
+}
+
 export function transformQqDetail(data: any): QqPlaylist {
   const songs: QqSong[] = (data?.songlist ?? []).map((s: any) => ({
     name: s?.name ?? s?.songname ?? s?.title ?? "",
     artists: (s?.singer ?? [])
-      .map((x: any) => x?.name)
-      .filter((n: unknown): n is string => Boolean(n)),
+      .filter((x: any) => Boolean(x?.name))
+      .map((x: any): QqSongArtist =>
+        x.mid ? { name: x.name, avatar: singerAvatarUrl(x.mid) } : { name: x.name },
+      ),
   }));
   return { title: data?.dirinfo?.title ?? "", songs };
 }

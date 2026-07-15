@@ -4,8 +4,9 @@ export async function addArtistReturningInserted(
   db: D1Database,
   subscriptionId: string,
   artistName: string,
+  avatar?: string | null,
 ): Promise<{ artistId: string; inserted: boolean }> {
-  const artist = await upsertArtist(db, artistName);
+  const artist = await upsertArtist(db, artistName, avatar);
   const res = await db
     .prepare("INSERT OR IGNORE INTO subscription_artists (subscription_id, artist_id) VALUES (?, ?)")
     .bind(subscriptionId, artist.id)

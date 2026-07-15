@@ -29,7 +29,9 @@ app.route("/internal", internalRouter);
 // Cron dispatch. Must match wrangler.jsonc `triggers.crons`: "0 2 * * *" crawls,
 // "30 2 * * *" mails. Anything unrecognised falls back to the crawl, which is the
 // safe default — a stray run costs a sweep, never a duplicate reminder.
-export const NOTIFY_CRON = "30 2 * * *";
+// NOT exported: workerd validates every named export of the entry module as a
+// handler and refuses to start when it sees a bare string.
+const NOTIFY_CRON = "30 2 * * *";
 
 // Jitter so we never hit Showstart exactly on the minute. Kept well under the
 // 15-minute Cron Trigger wall limit: the crawl sweep itself needs a few minutes
