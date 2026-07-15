@@ -50,6 +50,18 @@ const TIME_RE = /(\d{4})\.(\d{1,2})\.(\d{1,2}).*?(\d{1,2}):(\d{2})/;
 // upon us, which for a ticket-reminder product is exactly too late.
 export const SORT_NEWEST_FIRST = "2";
 
+// The date sort has a shape worth knowing (probed against 上海, which lists ~4000
+// shows in total): pages 1..~45 are the UPCOMING shows in ascending date order,
+// and from roughly page 46 the listing turns around and walks the PAST in
+// descending order (p40 -> 2026-10-19, p50 -> 2026-07-03, p100 -> 2026-05-28).
+//
+// So every upcoming show in a city is reachable in the first ~45 pages, and
+// everything after that is history. That makes this the right sort for a full
+// enumeration — walk until the dates turn around — while SORT_NEWEST_FIRST is the
+// right sort for an incremental crawl. Same set, different order, very different
+// cost: 45 pages instead of 400.
+export const SORT_BY_DATE = "";
+
 function md5(text: string): string {
   return crypto.createHash("md5").update(text, "utf8").digest("hex");
 }
@@ -308,10 +320,12 @@ function client(): ShowstartClient {
 export async function fetchCityShows(
   cityCode: string,
   page: number,
+  sortType: string = SORT_NEWEST_FIRST,
 ): Promise<{ shows: ShowSummary[] }> {
   const ssid = showstartCityId(cityCode);
   if (ssid == null) return { shows: [] };
-  const { shows } = transformShowList(await client().fetchCityShowsRaw(String(ssid), page), cityCode);
+  const raw = await client().fetchCityShowsRaw(String(ssid), page, sortType);
+  const { shows } = transformShowList(raw, cityCode);
   return { shows: shows.map((s) => ({ ...s, cityCode })) };
 }
 

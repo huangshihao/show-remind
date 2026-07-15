@@ -78,7 +78,7 @@ describe("fetchCityShows", () => {
       .spyOn(ShowstartClient.prototype, "fetchCityShowsRaw")
       .mockResolvedValue(LIST_RAW);
     await fetchCityShows("110000", 1); // 北京行政区码 -> Showstart id 10
-    expect(spy).toHaveBeenCalledWith("10", 1);
+    expect(spy).toHaveBeenCalledWith("10", 1, SORT_NEWEST_FIRST);
   });
 
   it("stamps the crawled行政区码 on every show (not Showstart's internal cityId)", async () => {
