@@ -7,7 +7,7 @@ import { manageRouter } from "./routes/manage";
 import { loginRouter } from "./routes/login";
 import { configRouter } from "./routes/config";
 import { internalRouter } from "./routes/internal";
-import { runScheduled } from "./pipeline/run";
+import { runCrawl, runNotify } from "./pipeline/run";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -26,12 +26,25 @@ app.route("/api/login", loginRouter);
 app.route("/api/config", configRouter);
 app.route("/internal", internalRouter);
 
+// Cron dispatch. Must match wrangler.jsonc `triggers.crons`: "0 2 * * *" crawls,
+// "30 2 * * *" mails. Anything unrecognised falls back to the crawl, which is the
+// safe default — a stray run costs a sweep, never a duplicate reminder.
+export const NOTIFY_CRON = "30 2 * * *";
+
+// Jitter so we never hit Showstart exactly on the minute. Kept well under the
+// 15-minute Cron Trigger wall limit: the crawl sweep itself needs a few minutes
+// (32 cities in waves of 6), so a large jitter could get the run killed before it
+// finished.
+const MAX_JITTER_MS = 3 * 60 * 1000;
+
 export { app }; // for app.request in tests
 export default {
   fetch: app.fetch,
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
-    // jitter 0-10 min so runs are not exactly on the minute
-    const delay = Math.floor(Math.random() * 10 * 60 * 1000);
-    ctx.waitUntil(new Promise<void>((r) => setTimeout(r, delay)).then(() => runScheduled(env)));
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    // The runtime waits for the returned promise (up to the 15-min limit), so the
+    // jittered sleep is safe here.
+    const delay = Math.floor(Math.random() * MAX_JITTER_MS);
+    const run = controller.cron === NOTIFY_CRON ? runNotify : runCrawl;
+    ctx.waitUntil(new Promise<void>((r) => setTimeout(r, delay)).then(() => run(env)));
   },
 };

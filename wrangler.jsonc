@@ -19,9 +19,14 @@
       "migrations_dir": "migrations"
     }
   ],
-  // Once a day at 02:00 UTC (10:00 Beijing): crawl each active city, match new
-  // shows against all followed artists, send reminder emails.
-  "triggers": { "crons": ["0 2 * * *"] },
+  // Two daily runs, 30 min apart, dispatched by cron expression in src/index.ts
+  // (keep these strings in sync with CRAWL_CRON / NOTIFY_CRON there).
+  // 02:00 UTC (10:00 Beijing): crawl every crawlable city and match new shows
+  //   against all followed artists.
+  // 02:30 UTC: send the reminder emails for whatever the crawl turned up.
+  // Split so the per-invocation 50-external-subrequest budget isn't shared
+  // between the city sweep and the outgoing mail.
+  "triggers": { "crons": ["0 2 * * *", "30 2 * * *"] },
   // Custom domain. Wrangler provisions the DNS record + TLS certificate for this
   // hostname on deploy (the zone must be in this Cloudflare account). The Worker
   // also stays reachable at its <name>.<subdomain>.workers.dev URL.

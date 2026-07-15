@@ -40,6 +40,16 @@ const TOKEN_ERROR_STATES = new Set([
 
 const TIME_RE = /(\d{4})\.(\d{1,2})\.(\d{1,2}).*?(\d{1,2}):(\d{2})/;
 
+// /app/activity/search sortType, probed against the live API:
+//   "" | "0" | "1" | "3" -> by show date, soonest first (all identical)
+//   "2"                  -> by publication recency, newest first
+//   "4" | "5"            -> include long-past shows (2023/2024); not useful here
+// Newest-first is what an incremental crawler wants: a show announced today for
+// a date months out appears on page 1 here, but tens of pages deep under the
+// date sort — so the date sort can't see new announcements until they're nearly
+// upon us, which for a ticket-reminder product is exactly too late.
+export const SORT_NEWEST_FIRST = "2";
+
 function md5(text: string): string {
   return crypto.createHash("md5").update(text, "utf8").digest("hex");
 }
@@ -160,7 +170,12 @@ export class ShowstartClient {
   // showstartCityId is Showstart's INTERNAL city id (北京=10), not the行政区码.
   // isHome MUST be 0: isHome:1 returns a fixed home/featured feed and ignores
   // cityId, so every city would get the same ~10 curated shows.
-  async fetchCityShowsRaw(showstartCityId: string, page: number): Promise<any> {
+  // sortType defaults to newest-published (see SORT_NEWEST_FIRST).
+  async fetchCityShowsRaw(
+    showstartCityId: string,
+    page: number,
+    sortType: string = SORT_NEWEST_FIRST,
+  ): Promise<any> {
     const body = JSON.stringify({
       activityType: 0,
       pageNo: page,
@@ -169,7 +184,7 @@ export class ShowstartClient {
       startTime: "",
       endTime: "",
       showStyle: "",
-      sortType: "",
+      sortType,
       service: "",
       price: "",
       cityType: 0,

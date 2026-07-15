@@ -8,6 +8,7 @@ import {
   searchArtistStrict,
   fetchCityShows,
   ShowstartClient,
+  SORT_NEWEST_FIRST,
 } from "./showstart";
 
 describe("normalizeShowTime", () => {
@@ -87,13 +88,30 @@ describe("fetchCityShows", () => {
     expect(shows.every((s) => s.cityCode === "110000")).toBe(true);
   });
 
-  it("returns no shows and never calls the API for a city with no pinned Showstart id", async () => {
+  it("returns no shows and never calls the API for an unknown city code", async () => {
     const spy = vi
       .spyOn(ShowstartClient.prototype, "fetchCityShowsRaw")
       .mockResolvedValue(LIST_RAW);
-    expect((await fetchCityShows("440300", 1)).shows).toEqual([]); // 深圳: unmapped
-    expect((await fetchCityShows("000000", 1)).shows).toEqual([]); // unknown
+    expect((await fetchCityShows("000000", 1)).shows).toEqual([]);
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  // The default sort is by show date, which buries a newly-announced far-future
+  // show tens of pages deep — the crawler would not see it until its date drew
+  // near, by which point tickets may be gone. sortType 2 orders by publication
+  // recency instead (verified live: 5 pages of sortType 2 span ~1.3k activityIds
+  // vs ~35k for the default), so newly announced shows surface on page 1.
+  it("asks Showstart for the most recently published shows, not the soonest", async () => {
+    const spy = vi
+      .spyOn(ShowstartClient.prototype, "request" as any)
+      .mockResolvedValue(LIST_RAW);
+
+    await fetchCityShows("110000", 1);
+
+    const body = JSON.parse((spy.mock.calls[0] as any[])[2]);
+    expect(body.sortType).toBe(SORT_NEWEST_FIRST);
+    expect(body.cityId).toBe(10);
+    expect(body.isHome).toBe(0);
   });
 });
 
