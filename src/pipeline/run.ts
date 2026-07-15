@@ -32,7 +32,7 @@ export async function runCrawl(env: Env): Promise<void> {
     }),
   );
   const failedCities = cities.filter((_city, i) => results[i].status === "rejected");
-  await maybeAlertAdmin(env.DB, env, failedCities, cities.length);
+  await maybeAlertAdmin(env.DB, env, failedCities, cities);
 }
 
 // Separate invocation from runCrawl on purpose. Workers Free allows 50 external
