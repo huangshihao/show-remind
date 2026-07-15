@@ -1,7 +1,7 @@
 export interface MatchInput {
   showId: string;
   artistId: string;
-  matchedBy: "performer" | "title";
+  matchedBy: "performer";
 }
 
 export async function persistMatches(db: D1Database, matches: MatchInput[]): Promise<number> {

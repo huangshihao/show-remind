@@ -14,7 +14,10 @@ export interface MatchShow {
 export interface Match {
   showId: string;
   artistId: string;
-  matchedBy: "performer" | "title";
+  // Only ever "performer": the lineup is the sole evidence that an artist is
+  // actually playing. Kept as a field (rather than dropped) because show_artists
+  // records it and a future match kind would land here.
+  matchedBy: "performer";
 }
 
 // Showstart often stores a performer as its Chinese name and English name stuck
@@ -36,20 +39,23 @@ function performerKeys(performer: string): string[] {
   return [...keys];
 }
 
+// Match strictly on the lineup. A title that names an artist is not evidence the
+// artist is playing, and matching on it was wrong every single time against live
+// data: a tribute night ("Avril Lavigne &Ladies Rock ...致敬之夜", lineup
+// ["Red Star"]), another band's tour title (声子虫's 《THE CURE》), and a concert
+// whose name merely contains the word ("Stars Gala音乐剧明星音乐会"). Sending
+// someone to a show their favourite act is not playing is worse than staying
+// quiet, so a show with no lineup — typically 音乐会/话剧 — matches nothing.
 export function matchShows(artists: MatchArtist[], shows: MatchShow[]): Match[] {
   const matches: Match[] = [];
   for (const show of shows) {
+    if (show.performers.length === 0) continue;
     const performerKeySet = new Set(show.performers.flatMap(performerKeys));
-    const normTitle = normalizeName(show.title);
     for (const artist of artists) {
       const names = [artist.normalizedName, ...artist.aliases.map(normalizeName)].filter(Boolean);
-      let matchedBy: "performer" | "title" | null = null;
       if (names.some((n) => performerKeySet.has(n))) {
-        matchedBy = "performer";
-      } else if (names.some((n) => n.length >= 2 && normTitle.includes(n))) {
-        matchedBy = "title";
+        matches.push({ showId: show.id, artistId: artist.id, matchedBy: "performer" });
       }
-      if (matchedBy) matches.push({ showId: show.id, artistId: artist.id, matchedBy });
     }
   }
   return matches;
