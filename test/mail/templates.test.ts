@@ -6,7 +6,7 @@ const show: NotifyShow = {
   showId: "s1", title: "刺猬专场 <x>", cityCode: "110000", venue: "MAO",
   showTime: "2026-08-01T20:00:00", price: "180", url: "https://wap.showstart.com/x/1",
   poster: "https://s2.showstart.com/x.jpg",
-  artistNames: ["刺猬"], hasTitleOnlyMatch: false,
+  artistNames: ["刺猬"],
 };
 
 it("confirmEmail links to /api/confirm with the token", () => {
@@ -49,11 +49,6 @@ it("reminderEmail leaves an already-parameterized poster URL untouched", () => {
 it("reminderEmail renders no img tag when the show has no poster", () => {
   const { html } = reminderEmail([{ ...show, poster: null }], "https://s.com", "tok123");
   expect(html).not.toContain("<img");
-});
-
-it("reminderEmail marks title-only matches as maybe-related", () => {
-  const { html } = reminderEmail([{ ...show, hasTitleOnlyMatch: true }], "https://s.com", "t");
-  expect(html).toContain("可能相关");
 });
 
 it("reminderEmail escapes HTML in the showTime-derived 'when' field", () => {

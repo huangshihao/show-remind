@@ -6,6 +6,7 @@ import { matchNewShows, matchArtistsToExistingShows } from "../../src/pipeline/m
 import { upsertArtist } from "../../src/db/artists";
 import { getShowsByIds, upsertShow } from "../../src/db/shows";
 import * as showstart from "@/lib/sources/showstart";
+import * as rateLimit from "../../src/pipeline/rate-limit";
 
 beforeEach(applySchema);
 
@@ -56,6 +57,8 @@ it("crawlCity paginates until an empty page", async () => {
 });
 
 it("crawlCity enriches at most MAX_DETAILS_PER_RUN new shows per run", async () => {
+  // Skip the real inter-fetch pacing; this is about the cap, not the wait.
+  vi.spyOn(rateLimit, "paceCrawl").mockResolvedValue();
   const many = Array.from({ length: MAX_DETAILS_PER_RUN + 4 }, (_, i) => ({
     showstartId: `s${i}`, title: `t${i}`, cityCode: "110000", showTime: null, url: `u${i}`, poster: null,
   }));
@@ -68,7 +71,39 @@ it("crawlCity enriches at most MAX_DETAILS_PER_RUN new shows per run", async () 
   expect(ids.length).toBe(MAX_DETAILS_PER_RUN);
   expect(detailSpy).toHaveBeenCalledTimes(MAX_DETAILS_PER_RUN);
   vi.restoreAllMocks();
-}, 20000); // crawlCity really sleeps ~1s between each detail fetch
+});
+
+// The listing is ordered newest-published first, so once a whole page is shows we
+// already have, everything past it is older still. Stopping there turns the daily
+// steady-state crawl from a fixed 15-page sweep into ~2 pages, and leaves the
+// external-subrequest budget for detail fetches instead of re-listing known shows.
+it("crawlCity stops paging once it reaches shows it already has", async () => {
+  vi.spyOn(rateLimit, "paceCrawl").mockResolvedValue();
+  await upsertShow(env.DB, {
+    showstartId: "old", title: "已抓过", cityCode: "110000", venue: null,
+    showTime: null, price: null, url: "uold", performers: [], poster: null,
+  });
+  const page = (ids: string[]) =>
+    ids.map((showstartId) => ({
+      showstartId, title: `t${showstartId}`, cityCode: "110000", showTime: null,
+      url: `u${showstartId}`, poster: null,
+    }));
+  const listSpy = vi.spyOn(showstart, "fetchCityShows").mockImplementation(async (_c, p) => {
+    if (p === 1) return { shows: page(["fresh1"]) };
+    return { shows: page(["old"]) }; // every later page is already-known territory
+  });
+  vi.spyOn(showstart, "fetchShowDetail").mockImplementation(async (id: string) => ({
+    showstartId: id, title: `t${id}`, cityCode: "110000", venue: null,
+    showTime: null, price: null, url: `u${id}`, performers: [], poster: null,
+  }));
+
+  const ids = await crawlCity(env.DB, "110000");
+
+  expect(ids.length).toBe(1); // only fresh1 enriched
+  // Must not walk all MAX_PAGES: a couple of known pages is enough to stop.
+  expect(listSpy.mock.calls.length).toBeLessThan(5);
+  vi.restoreAllMocks();
+});
 
 it("crawlCity falls back to the crawled city when the detail response has no city", async () => {
   mockCityPages([{ showstartId: "7", title: "x", cityCode: "110000", showTime: null, url: "u7", poster: null }]);

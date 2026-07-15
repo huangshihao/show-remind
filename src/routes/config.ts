@@ -11,6 +11,8 @@ configRouter.get("/", (c) => {
   c.header("Cache-Control", "no-store");
   return c.json({
     // Only expose code/name to the client; showstartId is an internal crawl detail.
+    // Every listed city is crawlable (City.showstartId is required), so the picker
+    // can never offer a city that would silently deliver nothing.
     cities: CITIES.map(({ code, name }) => ({ code, name })),
     publicMode: c.env.PUBLIC_MODE === "1",
     turnstileSiteKey: c.env.TURNSTILE_SITE_KEY ?? "",

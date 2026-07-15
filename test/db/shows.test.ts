@@ -32,6 +32,29 @@ it("filterNewShowstartIds returns only unseen ids", async () => {
   expect(await filterNewShowstartIds(db(), ["100", "101", "102"])).toEqual(["101", "102"]);
 });
 
+// D1 caps a query at 100 bound parameters — the 101st throws "too many SQL
+// variables". A busy city's listing runs to ~150 shows (MAX_PAGES=15 x 10/page),
+// so a one-placeholder-per-id IN (...) took the whole crawl down for exactly the
+// cities that matter most.
+it("filterNewShowstartIds handles more ids than D1's 100-parameter cap", async () => {
+  await upsertShow(db(), detail("7"));
+  const ids = Array.from({ length: 250 }, (_, i) => String(i));
+
+  const unseen = await filterNewShowstartIds(db(), ids);
+
+  expect(unseen).not.toContain("7"); // the one already stored
+  expect(unseen.length).toBe(249);
+});
+
+it("getShowsByIds handles more ids than D1's 100-parameter cap", async () => {
+  const shows = [];
+  for (let i = 0; i < 120; i++) shows.push(await upsertShow(db(), detail(`p${i}`)));
+
+  const rows = await getShowsByIds(db(), shows.map((s) => s.id));
+
+  expect(rows.length).toBe(120);
+});
+
 it("persistMatches links shows to artists idempotently", async () => {
   const show = await upsertShow(db(), detail("100"));
   const artist = await upsertArtist(db(), "刺猬");

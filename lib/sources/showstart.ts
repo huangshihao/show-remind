@@ -40,6 +40,16 @@ const TOKEN_ERROR_STATES = new Set([
 
 const TIME_RE = /(\d{4})\.(\d{1,2})\.(\d{1,2}).*?(\d{1,2}):(\d{2})/;
 
+// /app/activity/search sortType, probed against the live API:
+//   "" | "0" | "1" | "3" -> by show date, soonest first (all identical)
+//   "2"                  -> by publication recency, newest first
+//   "4" | "5"            -> include long-past shows (2023/2024); not useful here
+// Newest-first is what an incremental crawler wants: a show announced today for
+// a date months out appears on page 1 here, but tens of pages deep under the
+// date sort — so the date sort can't see new announcements until they're nearly
+// upon us, which for a ticket-reminder product is exactly too late.
+export const SORT_NEWEST_FIRST = "2";
+
 function md5(text: string): string {
   return crypto.createHash("md5").update(text, "utf8").digest("hex");
 }
@@ -51,6 +61,23 @@ export function normalizeShowTime(raw: string | null | undefined): string | null
   const [, y, mo, d, h, mi] = m;
   const pad = (n: string) => n.padStart(2, "0");
   return `${y}-${pad(mo)}-${pad(d)}T${pad(h)}:${mi}:00`;
+}
+
+// Showstart's epoch-ms fields are the authoritative instant; showTime is only a
+// display string. Prefer the epoch: a multi-day event's showTime is a RANGE
+// ("2026.05.01－05.04") that carries no clock time and cannot be parsed at all,
+// which used to yield NULL — and NULL was read as "date unknown, so upcoming",
+// leaving finished festivals on the page for months.
+//
+// Emitted as Beijing wall-clock (the venue's own timezone), matching what the
+// site displays and what the UI renders verbatim. Done by offsetting rather than
+// via Intl: China has had a single UTC+8 offset with no DST since 1991, so the
+// arithmetic is exact and does not depend on the runtime's ICU data.
+const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+export function showTimeFromEpoch(epochMs: unknown): string | null {
+  if (typeof epochMs !== "number" || !Number.isFinite(epochMs) || epochMs <= 0) return null;
+  return new Date(epochMs + BEIJING_OFFSET_MS).toISOString().slice(0, 19);
 }
 
 export interface ShowSummary {
@@ -160,7 +187,12 @@ export class ShowstartClient {
   // showstartCityId is Showstart's INTERNAL city id (北京=10), not the行政区码.
   // isHome MUST be 0: isHome:1 returns a fixed home/featured feed and ignores
   // cityId, so every city would get the same ~10 curated shows.
-  async fetchCityShowsRaw(showstartCityId: string, page: number): Promise<any> {
+  // sortType defaults to newest-published (see SORT_NEWEST_FIRST).
+  async fetchCityShowsRaw(
+    showstartCityId: string,
+    page: number,
+    sortType: string = SORT_NEWEST_FIRST,
+  ): Promise<any> {
     const body = JSON.stringify({
       activityType: 0,
       pageNo: page,
@@ -169,7 +201,7 @@ export class ShowstartClient {
       startTime: "",
       endTime: "",
       showStyle: "",
-      sortType: "",
+      sortType,
       service: "",
       price: "",
       cityType: 0,
@@ -210,7 +242,7 @@ export function transformShowList(raw: any, cityCode: string): { shows: ShowSumm
       showstartId: id,
       title: row?.title ?? "",
       cityCode: String(row?.cityId ?? cityCode),
-      showTime: normalizeShowTime(row?.showTime),
+      showTime: showTimeFromEpoch(row?.showStartTime) ?? normalizeShowTime(row?.showTime),
       url: detailUrl(id),
       poster: row?.avatar ?? null,
     });
@@ -253,7 +285,7 @@ export function transformShowDetail(raw: any): ShowDetail {
     title: result?.title ?? result?.activityName ?? "",
     cityCode: String(result?.cityId ?? ""),
     venue: detailVenue(result),
-    showTime: normalizeShowTime(result?.showTime),
+    showTime: showTimeFromEpoch(result?.showStartTime) ?? normalizeShowTime(result?.showTime),
     price: price != null && price !== "" ? String(price) : null,
     url: detailUrl(id),
     performers: detailPerformers(result),

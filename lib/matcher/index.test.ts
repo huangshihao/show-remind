@@ -27,26 +27,43 @@ describe("matchShows", () => {
     expect(matchShows([wanqing], shows)[0].matchedBy).toBe("performer");
   });
 
-  it("falls back to title contains", () => {
+  // The lineup is the only evidence that an artist is actually playing. A title
+  // naming an artist proves nothing — every one of these is a real false positive
+  // this matcher produced against live Showstart data.
+  it("does not match a tribute night that only names the artist in its title", () => {
+    const avril: MatchArtist = {
+      id: "av", name: "Avril Lavigne", normalizedName: "avril lavigne", aliases: [],
+    };
     const shows: MatchShow[] = [
-      { id: "s2", title: "Radiohead 2026 巡演 上海", performers: [] },
+      {
+        id: "s2",
+        title: "Avril Lavigne &Ladies Rock 艾薇儿&歌后联盟摇滚传奇致敬之夜",
+        performers: ["Red Star"], // a tribute act — Avril is not on this bill
+      },
+    ];
+    expect(matchShows([avril], shows)).toEqual([]);
+  });
+
+  it("does not match when the artist's name is another band's tour title (The Cure ≠ 声子虫《THE CURE》)", () => {
+    const cure: MatchArtist = { id: "c", name: "The Cure", normalizedName: "the cure", aliases: [] };
+    const shows: MatchShow[] = [
+      { id: "s3", title: '声子虫2026《THE CURE》"解药"巡演 上海站', performers: ["声子虫乐队"] },
+    ];
+    expect(matchShows([cure], shows)).toEqual([]);
+  });
+
+  it("ignores a show with no lineup at all, however suggestive its title", () => {
+    const shows: MatchShow[] = [{ id: "s4", title: "Radiohead 2026 巡演 上海", performers: [] }];
+    expect(matchShows([radiohead], shows)).toEqual([]);
+  });
+
+  it("matches on the lineup even when the title also names the artist", () => {
+    const shows: MatchShow[] = [
+      { id: "s5", title: "Radiohead night", performers: ["Radiohead"] },
     ];
     expect(matchShows([radiohead], shows)).toEqual([
-      { showId: "s2", artistId: "a2", matchedBy: "title" },
+      { showId: "s5", artistId: "a2", matchedBy: "performer" },
     ]);
-  });
-
-  it("prefers performer over title when both would hit", () => {
-    const shows: MatchShow[] = [
-      { id: "s3", title: "Radiohead night", performers: ["Radiohead"] },
-    ];
-    expect(matchShows([radiohead], shows)[0].matchedBy).toBe("performer");
-  });
-
-  it("does not title-match single-character normalized names", () => {
-    const short: MatchArtist = { id: "a3", name: "P", normalizedName: "p", aliases: [] };
-    const shows: MatchShow[] = [{ id: "s4", title: "power up party", performers: [] }];
-    expect(matchShows([short], shows)).toEqual([]);
   });
 
   it("normalizes fullwidth/case on both sides", () => {

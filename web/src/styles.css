@@ -550,6 +550,14 @@ button { font-family: inherit; }
 .ticket .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .ticket .t-title { margin: 0; font-weight: 800; font-size: 15px; line-height: 1.25;
   overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+/* "already emailed you about this one" — quiet by design: it is provenance, not
+   a call to action, and must not outshout the artist names. */
+.ticket .sent-tag {
+  align-self: flex-start;
+  font-size: 11px; font-family: var(--font-ticket); font-weight: 700;
+  padding: 2px 7px; border-radius: 999px;
+  border: 1.5px solid var(--line); color: var(--ink-soft);
+}
 .ticket .t-artists { margin: 0; font-size: 12.5px; font-weight: 600; }
 .ticket .t-artists mark { background: var(--acid); color: var(--acid-ink); padding: 0 4px; border-radius: 4px; }
 .ticket .t-row { margin: 0; font-size: 12px; color: var(--ink-soft); font-family: var(--font-ticket);

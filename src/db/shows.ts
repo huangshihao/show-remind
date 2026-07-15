@@ -44,14 +44,29 @@ function toRow(r: RawRow): ShowRow {
   };
 }
 
+// D1 rejects a query with more than 100 bound parameters ("too many SQL
+// variables"). Any `IN (${placeholders})` built one-per-id must therefore be
+// chunked — a busy city's listing is ~150 shows, which silently took the entire
+// crawl down for the biggest cities.
+const D1_MAX_BOUND_PARAMS = 100;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 export async function filterNewShowstartIds(db: D1Database, ids: string[]): Promise<string[]> {
   if (ids.length === 0) return [];
-  const placeholders = ids.map(() => "?").join(",");
-  const { results } = await db
-    .prepare(`SELECT showstart_id FROM shows WHERE showstart_id IN (${placeholders})`)
-    .bind(...ids)
-    .all<{ showstart_id: string }>();
-  const seen = new Set(results.map((r) => r.showstart_id));
+  const seen = new Set<string>();
+  for (const batch of chunk(ids, D1_MAX_BOUND_PARAMS)) {
+    const placeholders = batch.map(() => "?").join(",");
+    const { results } = await db
+      .prepare(`SELECT showstart_id FROM shows WHERE showstart_id IN (${placeholders})`)
+      .bind(...batch)
+      .all<{ showstart_id: string }>();
+    for (const r of results) seen.add(r.showstart_id);
+  }
   return ids.filter((id) => !seen.has(id));
 }
 
@@ -93,10 +108,14 @@ export async function getAllShows(db: D1Database): Promise<ShowRow[]> {
 
 export async function getShowsByIds(db: D1Database, ids: string[]): Promise<ShowRow[]> {
   if (ids.length === 0) return [];
-  const placeholders = ids.map(() => "?").join(",");
-  const { results } = await db
-    .prepare(`SELECT * FROM shows WHERE id IN (${placeholders})`)
-    .bind(...ids)
-    .all<RawRow>();
-  return results.map(toRow);
+  const rows: ShowRow[] = [];
+  for (const batch of chunk(ids, D1_MAX_BOUND_PARAMS)) {
+    const placeholders = batch.map(() => "?").join(",");
+    const { results } = await db
+      .prepare(`SELECT * FROM shows WHERE id IN (${placeholders})`)
+      .bind(...batch)
+      .all<RawRow>();
+    for (const r of results) rows.push(toRow(r));
+  }
+  return rows;
 }

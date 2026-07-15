@@ -1,3 +1,4 @@
+import { UPCOMING } from "./time";
 export interface NotifyShow {
   showId: string;
   title: string;
@@ -8,7 +9,6 @@ export interface NotifyShow {
   url: string;
   poster: string | null;
   artistNames: string[];
-  hasTitleOnlyMatch: boolean;
 }
 
 export interface Candidate {
@@ -32,7 +32,6 @@ interface JoinRow {
   url: string;
   poster: string | null;
   artist_name: string;
-  matched_by: string;
 }
 
 export async function findNotifyCandidates(db: D1Database): Promise<Candidate[]> {
@@ -42,13 +41,15 @@ export async function findNotifyCandidates(db: D1Database): Promise<Candidate[]>
     .prepare(
       `SELECT s.id AS subscription_id, s.email, s.token, s.cities,
               sh.id AS show_id, sh.title, sh.city_code, sh.venue, sh.show_time, sh.price, sh.url, sh.poster,
-              a.name AS artist_name, xsa.matched_by
+              a.name AS artist_name
        FROM subscriptions s
        JOIN subscription_artists sa ON sa.subscription_id = s.id
        JOIN show_artists xsa ON xsa.artist_id = sa.artist_id
        JOIN shows sh ON sh.id = xsa.show_id
        JOIN artists a ON a.id = sa.artist_id
        WHERE s.status = 'active'
+         -- Never remind about a gig that has already happened.
+         AND ${UPCOMING("sh.show_time")}
          AND NOT EXISTS (
            SELECT 1 FROM notifications n
            WHERE n.subscription_id = s.id AND n.show_id = sh.id
@@ -78,12 +79,10 @@ export async function findNotifyCandidates(db: D1Database): Promise<Candidate[]>
         url: r.url,
         poster: r.poster,
         artistNames: [],
-        hasTitleOnlyMatch: true,
       };
       cand.shows.push(show);
     }
     if (!show.artistNames.includes(r.artist_name)) show.artistNames.push(r.artist_name);
-    if (r.matched_by !== "title") show.hasTitleOnlyMatch = false;
   }
   return [...bySub.values()].filter((c) => c.shows.length > 0);
 }
