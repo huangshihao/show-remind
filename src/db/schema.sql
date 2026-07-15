@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS artists (
   normalized_name TEXT NOT NULL UNIQUE,
   aliases TEXT NOT NULL DEFAULT '[]',
   avatar TEXT,
+  netease_id TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

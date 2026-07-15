@@ -56,14 +56,12 @@ export async function resolvePlaylist(
       : await resolveQq(parsed.externalId);
   const artists = tallyArtists(playlist);
   if (parsed.platform === "netease") await attachNeteaseAvatars(artists);
-  // Public shape: every artist gets an explicit avatar (null when unknown);
-  // sourceId is a lookup-time detail, not part of the API response.
+  // Every artist gets an explicit avatar (null when unknown). sourceId stays
+  // on the tallies so the import path can persist it (see routes/manage.ts);
+  // the public /api/resolve response strips it (see routes/resolve.ts).
   return {
     platform: parsed.platform,
     title: playlist.title,
-    artists: artists.map(({ sourceId: _sourceId, avatar, ...rest }) => ({
-      ...rest,
-      avatar: avatar ?? null,
-    })),
+    artists: artists.map((a) => ({ ...a, avatar: a.avatar ?? null })),
   };
 }

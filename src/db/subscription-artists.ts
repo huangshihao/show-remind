@@ -5,8 +5,9 @@ export async function addArtistReturningInserted(
   subscriptionId: string,
   artistName: string,
   avatar?: string | null,
+  neteaseId?: string | null,
 ): Promise<{ artistId: string; inserted: boolean }> {
-  const artist = await upsertArtist(db, artistName, avatar);
+  const artist = await upsertArtist(db, artistName, avatar, neteaseId);
   const res = await db
     .prepare("INSERT OR IGNORE INTO subscription_artists (subscription_id, artist_id) VALUES (?, ?)")
     .bind(subscriptionId, artist.id)
@@ -47,18 +48,26 @@ export async function setArtists(
 export async function listArtists(db: D1Database, subscriptionId: string): Promise<ArtistRow[]> {
   const { results } = await db
     .prepare(
-      `SELECT a.id, a.name, a.normalized_name, a.aliases, a.avatar
+      `SELECT a.id, a.name, a.normalized_name, a.aliases, a.avatar, a.netease_id
        FROM artists a JOIN subscription_artists sa ON sa.artist_id = a.id
        WHERE sa.subscription_id = ? ORDER BY a.name`,
     )
     .bind(subscriptionId)
-    .all<{ id: string; name: string; normalized_name: string; aliases: string; avatar: string | null }>();
+    .all<{
+      id: string;
+      name: string;
+      normalized_name: string;
+      aliases: string;
+      avatar: string | null;
+      netease_id: string | null;
+    }>();
   return results.map((r) => ({
     id: r.id,
     name: r.name,
     normalizedName: r.normalized_name,
     aliases: JSON.parse(r.aliases),
     avatar: r.avatar,
+    neteaseId: r.netease_id,
   }));
 }
 

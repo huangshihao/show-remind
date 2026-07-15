@@ -7,6 +7,8 @@ import { setArtists, listArtists, addArtistToSubscription } from "../../src/db/s
 import { upsertShow } from "../../src/db/shows";
 import { persistMatches } from "../../src/db/show-artists";
 import * as showstart from "@/lib/sources/showstart";
+import * as netease from "@/lib/adapters/netease";
+import { upsertArtist, setArtistAvatar, getAllArtists } from "../../src/db/artists";
 
 beforeEach(applySchema);
 // GET /api/manage lazily backfills avatars via searchArtistStrict; default it
@@ -236,6 +238,118 @@ it("import persists playlist avatars for new artists and heals existing avatar-l
   // pre-existing artist without an avatar healed by the re-import
   expect(byName["刺猬"]).toBe("https://y.qq.com/music/photo_new/T001R300x300M000002IZbHE0PLcjs.jpg");
   vi.unstubAllGlobals();
+});
+
+it("importing a netease playlist stores each artist's netease id for later exact avatar lookups", async () => {
+  const sub = await activeSub();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("/api/v6/playlist/detail")) {
+        return new Response(JSON.stringify({ playlist: { name: "N", trackIds: [{ id: 1 }] } }));
+      }
+      if (url.includes("/api/v3/song/detail")) {
+        return new Response(
+          JSON.stringify({
+            songs: [
+              { id: 1, name: "s", ar: [{ id: 36012, name: "万能青年旅店" }, { id: 45001, name: "低苦艾" }] },
+            ],
+          }),
+        );
+      }
+      if (url.includes("/api/artist/head/info/get")) {
+        return new Response(
+          JSON.stringify({ data: { artist: { avatar: "http://p2.music.126.net/wqny.jpg" } } }),
+        );
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    }),
+  );
+  const res = await app.request(
+    `/api/manage/import?token=${sub.token}`,
+    j({ link: "https://music.163.com/#/playlist?id=42" }),
+    env,
+  );
+  expect(res.status).toBe(200);
+  const rows = await listArtists(env.DB, sub.id);
+  const wq = rows.find((a) => a.name === "万能青年旅店")!;
+  expect(wq.neteaseId).toBe("36012");
+  expect(wq.avatar).toBe("https://p2.music.126.net/wqny.jpg");
+  expect(rows.find((a) => a.name === "低苦艾")!.neteaseId).toBe("45001");
+  vi.unstubAllGlobals();
+});
+
+it("backfill prefers the stored netease id over a Showstart name search", async () => {
+  const sub = await activeSub();
+  const withId = await upsertArtist(env.DB, "梅卡德尔", null, "30016");
+  await env.DB.prepare(
+    "INSERT INTO subscription_artists (subscription_id, artist_id) VALUES (?, ?)",
+  ).bind(sub.id, withId.id).run();
+
+  const neteaseSpy = vi
+    .spyOn(netease, "fetchArtistAvatar")
+    .mockResolvedValue("https://p2.music.126.net/mkd.jpg");
+  const showstartSpy = vi.mocked(showstart.searchArtistStrict);
+  showstartSpy.mockClear();
+
+  const ctx = createExecutionContext();
+  const res = await app.request(`/api/manage?token=${sub.token}`, {}, env, ctx);
+  expect(res.status).toBe(200);
+  await waitOnExecutionContext(ctx);
+
+  expect(neteaseSpy).toHaveBeenCalledWith("30016");
+  // 梅卡德尔 went through netease; only the id-less 刺猬 fell back to Showstart.
+  expect(showstartSpy).toHaveBeenCalledTimes(1);
+  expect(showstartSpy).toHaveBeenCalledWith("刺猬");
+  const rows = await listArtists(env.DB, sub.id);
+  expect(rows.find((a) => a.name === "梅卡德尔")!.avatar).toBe("https://p2.music.126.net/mkd.jpg");
+});
+
+it("a searched-empty (\"\") artist WITH a netease id is retried via netease", async () => {
+  const sub = await activeSub();
+  const artist = await upsertArtist(env.DB, "盘尼西林", null, "13282");
+  await setArtistAvatar(env.DB, artist.id, ""); // Showstart already missed it
+  await env.DB.prepare(
+    "INSERT INTO subscription_artists (subscription_id, artist_id) VALUES (?, ?)",
+  ).bind(sub.id, artist.id).run();
+
+  vi.spyOn(netease, "fetchArtistAvatar").mockResolvedValue("https://p2.music.126.net/pns.jpg");
+
+  const ctx = createExecutionContext();
+  await app.request(`/api/manage?token=${sub.token}`, {}, env, ctx);
+  await waitOnExecutionContext(ctx);
+
+  const rows = await listArtists(env.DB, sub.id);
+  expect(rows.find((a) => a.name === "盘尼西林")!.avatar).toBe("https://p2.music.126.net/pns.jpg");
+});
+
+it("netease definitively having no photo falls back to Showstart once, then caches \"\" and clears the id (no retry loop)", async () => {
+  const sub = await activeSub();
+  const artist = await upsertArtist(env.DB, "无照片乐队", null, "40404");
+  await env.DB.prepare(
+    "INSERT INTO subscription_artists (subscription_id, artist_id) VALUES (?, ?)",
+  ).bind(sub.id, artist.id).run();
+
+  const neteaseSpy = vi.spyOn(netease, "fetchArtistAvatar").mockResolvedValue(null);
+  const showstartSpy = vi.mocked(showstart.searchArtistStrict); // top-level mock: resolves null
+
+  const ctx = createExecutionContext();
+  await app.request(`/api/manage?token=${sub.token}`, {}, env, ctx);
+  await waitOnExecutionContext(ctx);
+
+  const row = (await getAllArtists(env.DB)).find((a) => a.name === "无照片乐队")!;
+  expect(row.avatar).toBe(""); // both sources definitively missed
+  expect(row.neteaseId).toBeNull(); // id cleared -> not retried forever
+
+  // Second load: nothing pending for this artist anymore.
+  neteaseSpy.mockClear();
+  showstartSpy.mockClear();
+  const ctx2 = createExecutionContext();
+  await app.request(`/api/manage?token=${sub.token}`, {}, env, ctx2);
+  await waitOnExecutionContext(ctx2);
+  expect(neteaseSpy).not.toHaveBeenCalled();
+  expect(showstartSpy).not.toHaveBeenCalledWith("无照片乐队");
 });
 
 it("update cities validates the set", async () => {

@@ -8,8 +8,9 @@ import {
   countArtists,
 } from "../db/subscription-artists";
 import { matchArtistsToExistingShows } from "../pipeline/match";
-import { setArtistAvatar, type ArtistRow } from "../db/artists";
+import { setArtistAvatar, setArtistNeteaseId, type ArtistRow } from "../db/artists";
 import { searchArtistStrict } from "@/lib/sources/showstart";
+import { fetchArtistAvatar } from "@/lib/adapters/netease";
 import { resolvePlaylist } from "../services/resolve";
 import { validCities, MAX_ARTISTS } from "../services/limits";
 import { verifyTurnstile } from "../turnstile";
@@ -17,13 +18,14 @@ import { findUpcomingShowsForSubscription } from "../db/my-shows";
 
 export const manageRouter = new Hono<{ Bindings: Env }>();
 
-// Cap avatar lookups per manage load: each never-searched artist costs 1
-// search + 1 write-back (~2 subrequests), on top of the getByToken +
-// listArtists reads already spent. 15 artists × 2 subrequests + overhead
-// stays well under the 50-subrequest budget; artists past the cap keep
-// avatar: null and get filled on a later load. See src/services/resolve.ts
-// for the analogous cap on the resolve path.
-const AVATAR_LOOKUP_LIMIT = 15;
+// Cap avatar lookups per manage load. Each pending artist costs 1 external
+// fetch (netease head-info or Showstart search — D1 writes don't count
+// against the 50-external-subrequest budget), and this runs in waitUntil so
+// it shares the same invocation budget as the response. 30 lookups + the
+// rare netease→Showstart double leaves comfortable headroom; artists past
+// the cap stay pending and get picked up on a later load. See
+// src/services/resolve.ts for the analogous cap on the resolve path.
+const AVATAR_LOOKUP_LIMIT = 30;
 // One slow Showstart search shouldn't hang the whole manage response.
 const AVATAR_LOOKUP_TIMEOUT_MS = 4000;
 
@@ -38,27 +40,50 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-// Lazily backfill avatars for artists that were never looked up (avatar === null).
-// avatar semantics: null = never searched, "" = searched but Showstart had no
-// match (don't re-search), a URL = found. Mutates rows in place; never throws.
+// Lazily backfill avatars. Pending rows are those never looked up
+// (avatar === null) plus searched-empty ("") rows that gained a netease id —
+// a Showstart miss says nothing about netease, which knows every playlist
+// artist. avatar semantics: null = never searched, "" = every source we had
+// came up empty (don't re-search), a URL = found. Mutates rows in place;
+// never throws.
 //
-// Critical: only a DEFINITIVE "search succeeded, no artist found" may cache
-// "". A timeout or a network/parse error must leave the row as null so it is
-// retried on the next load — caching those as "" would be indistinguishable
-// from a genuine miss and the avatar would never be found. That's why this
-// uses searchArtistStrict (throws on error) instead of searchArtist (which
-// swallows errors into null, making them look like "no match" to a caller).
+// An artist with a netease id resolves via head-info (exact, by id). A
+// DEFINITIVE "profile has no photo" clears the id (so the row can't loop
+// through the netease path on every load) and falls through to one Showstart
+// name search. Artists without an id go straight to Showstart.
+//
+// Critical: only a DEFINITIVE "lookup succeeded, nothing found" may cache
+// "". A timeout or a network/parse error must leave the row's state as-is so
+// it is retried on the next load — caching those as "" would be
+// indistinguishable from a genuine miss and the avatar would never be found.
+// That's why this uses searchArtistStrict / fetchArtistAvatar (both throw on
+// error) instead of a null-swallowing variant.
 async function backfillAvatars(db: D1Database, artists: ArtistRow[]): Promise<void> {
-  const pending = artists.filter((a) => a.avatar === null).slice(0, AVATAR_LOOKUP_LIMIT);
+  const pending = artists
+    .filter((a) => a.avatar === null || (a.avatar === "" && a.neteaseId))
+    .slice(0, AVATAR_LOOKUP_LIMIT);
   await Promise.all(
     pending.map(async (artist) => {
       try {
+        if (artist.neteaseId) {
+          const fromNetease = await withTimeout(
+            fetchArtistAvatar(artist.neteaseId),
+            AVATAR_LOOKUP_TIMEOUT_MS,
+          );
+          if (fromNetease) {
+            await setArtistAvatar(db, artist.id, fromNetease);
+            artist.avatar = fromNetease;
+            return;
+          }
+          await setArtistNeteaseId(db, artist.id, null);
+          artist.neteaseId = null;
+        }
         const hit = await withTimeout(searchArtistStrict(artist.name), AVATAR_LOOKUP_TIMEOUT_MS);
         const avatar = hit?.avatar ?? ""; // mark searched-empty when no hit or hit has no photo
         await setArtistAvatar(db, artist.id, avatar);
         artist.avatar = avatar;
       } catch {
-        // timeout or error: leave avatar null, retried on a later load
+        // timeout or error: leave the row as-is, retried on a later load
       }
     }),
   );
@@ -141,6 +166,7 @@ manageRouter.post("/import", async (c) => {
       sub.id,
       a.name,
       a.avatar,
+      a.sourceId,
     );
     if (inserted) {
       added++;

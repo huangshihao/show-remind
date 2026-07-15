@@ -25,7 +25,12 @@ resolveRouter.post("/", async (c) => {
     if (result.artists.length === 0) {
       return c.json({ error: "没有从歌单里解析到艺人，换个歌单试试" }, 422);
     }
-    return c.json(result);
+    // sourceId is a persistence detail for the import path, not public API.
+    return c.json({
+      platform: result.platform,
+      title: result.title,
+      artists: result.artists.map(({ sourceId: _sourceId, ...rest }) => rest),
+    });
   } catch (err) {
     if (err instanceof InvalidPlaylistLinkError) {
       return c.json({ error: "无法识别的链接，请粘贴网易云或 QQ 音乐的公开歌单链接" }, 400);

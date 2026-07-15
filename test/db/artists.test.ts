@@ -1,7 +1,12 @@
 import { beforeEach, expect, it } from "vitest";
 import { env } from "cloudflare:test";
 import { applySchema } from "./apply-schema";
-import { upsertArtist, getAllArtists, setArtistAvatar } from "../../src/db/artists";
+import {
+  upsertArtist,
+  getAllArtists,
+  setArtistAvatar,
+  setArtistNeteaseId,
+} from "../../src/db/artists";
 
 beforeEach(applySchema);
 const db = () => env.DB;
@@ -51,6 +56,28 @@ it("upsertArtist heals an existing avatar-less row (null or searched-empty), but
   // and no incoming avatar leaves the row untouched
   const untouched = await upsertArtist(db(), "刺猬");
   expect(untouched.avatar).toBe("https://img/1.jpg");
+});
+
+it("upsertArtist stores the netease id on insert and heals it onto existing rows", async () => {
+  const a = await upsertArtist(db(), "刺猬", null, "36012");
+  expect(a.neteaseId).toBe("36012");
+
+  // existing row without an id gets it backfilled
+  const b = await upsertArtist(db(), "海龟先生");
+  expect(b.neteaseId).toBeNull();
+  const healed = await upsertArtist(db(), "海龟先生", null, "12977");
+  expect(healed.id).toBe(b.id);
+  expect(healed.neteaseId).toBe("12977");
+
+  // an already-stored id is never overwritten
+  const kept = await upsertArtist(db(), "刺猬", null, "99999");
+  expect(kept.neteaseId).toBe("36012");
+});
+
+it("setArtistNeteaseId can clear the id (terminal no-avatar case)", async () => {
+  const a = await upsertArtist(db(), "刺猬", null, "36012");
+  await setArtistNeteaseId(db(), a.id, null);
+  expect((await getAllArtists(db()))[0].neteaseId).toBeNull();
 });
 
 it("treats case/whitespace variants as the same artist", async () => {
