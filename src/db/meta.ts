@@ -10,14 +10,3 @@ export async function setMeta(db: D1Database, key: string, value: string): Promi
     .run();
 }
 
-const KEY = "consecutive_full_failures";
-
-export async function bumpConsecutiveFailures(db: D1Database): Promise<number> {
-  const n = Number((await getMeta(db, KEY)) ?? "0") + 1;
-  await setMeta(db, KEY, String(n));
-  return n;
-}
-
-export async function resetConsecutiveFailures(db: D1Database): Promise<void> {
-  await setMeta(db, KEY, "0");
-}
