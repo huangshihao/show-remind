@@ -49,3 +49,10 @@ export const requestLogin = (email: string, turnstileToken?: string) =>
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ email, turnstileToken }),
   }).then((r) => json<{ ok: boolean }>(r));
+
+export const importPlaylist = (link: string, token: string, turnstileToken?: string) =>
+  fetch(`/api/manage/import?token=${encodeURIComponent(token)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ link, turnstileToken }),
+  }).then((r) => json<{ added: number; artists: { id: string; name: string }[] }>(r));
