@@ -95,20 +95,6 @@ manageRouter.post("/cities", async (c) => {
   return c.json({ ok: true });
 });
 
-manageRouter.post("/artists", async (c) => {
-  const sub = await requireSub(c);
-  if (!sub) return c.notFound();
-  const { name } = await c.req.json<{ name?: string }>();
-  const clean = (name ?? "").trim();
-  if (!clean) return c.json({ error: "音乐人名称不能为空" }, 400);
-  if (c.env.PUBLIC_MODE === "1" && (await countArtists(c.env.DB, sub.id)) >= MAX_ARTISTS) {
-    return c.json({ error: `最多关注 ${MAX_ARTISTS} 位` }, 400);
-  }
-  const { artistId, inserted } = await addArtistReturningInserted(c.env.DB, sub.id, clean);
-  if (inserted) await matchArtistsToExistingShows(c.env.DB, [artistId]);
-  return c.json({ id: artistId });
-});
-
 manageRouter.delete("/artists/:artistId", async (c) => {
   const sub = await requireSub(c);
   if (!sub) return c.notFound();
@@ -134,9 +120,11 @@ manageRouter.post("/import", async (c) => {
   try {
     resolved = await resolvePlaylist(link);
   } catch {
-    return c.json({ error: "歌单解析失败，请稍后重试或手动添加" }, 502);
+    return c.json({ error: "歌单解析失败，请稍后重试" }, 502);
   }
-  const cap = MAX_ARTISTS - (await countArtists(c.env.DB, sub.id));
+  // Public-mode abuse protection only — self-host imports the whole playlist.
+  const cap =
+    c.env.PUBLIC_MODE === "1" ? MAX_ARTISTS - (await countArtists(c.env.DB, sub.id)) : Infinity;
   let added = 0;
   const newArtistIds: string[] = [];
   for (const a of resolved.artists) {

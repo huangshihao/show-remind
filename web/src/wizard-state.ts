@@ -16,7 +16,6 @@ export interface WizardState {
 export type WizardAction =
   | { type: "LOADED_PLAYLIST"; title: string; artists: Selectable[] }
   | { type: "TOGGLE_ARTIST"; name: string }
-  | { type: "ADD_MANUAL"; name: string }
   | { type: "SET_CITIES"; cities: string[] }
   | { type: "SET_EMAIL"; email: string }
   | { type: "GOTO"; step: number };
@@ -42,16 +41,6 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
         selected: on
           ? state.selected.filter((n) => n !== action.name)
           : [...state.selected, action.name],
-      };
-    }
-    case "ADD_MANUAL": {
-      const name = action.name.trim();
-      if (!name) return state;
-      const known = state.artists.some((a) => a.name === name);
-      return {
-        ...state,
-        artists: known ? state.artists : [...state.artists, { name, songCount: 0 }],
-        selected: state.selected.includes(name) ? state.selected : [...state.selected, name],
       };
     }
     case "SET_CITIES":

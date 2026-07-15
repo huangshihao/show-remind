@@ -316,8 +316,6 @@ button { font-family: inherit; }
 .platform-note span { display: inline-flex; align-items: center; gap: 5px; }
 .platform-note b { color: var(--ink-soft); font-weight: 700; }
 
-.or-skip { text-align: center; margin-top: 6px; }
-
 /* ---- Artist select grid (wizard step 1) ---------------------------------- */
 
 .artist-grid {
@@ -500,16 +498,6 @@ button { font-family: inherit; }
 .artist-tile:focus-within .artist-tile-remove { opacity: 1; }
 @media (hover: none) { .artist-tile-remove { opacity: 1; } }
 .artist-tile-remove:hover { background: var(--coral); }
-
-.add-tile {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; aspect-ratio: 1; border-radius: var(--radius);
-  border: 1.5px dashed var(--line-strong); background: transparent;
-  color: var(--ink-soft); cursor: pointer; font-weight: 700; font-size: 13px;
-  transition: background 0.12s, color 0.12s;
-}
-.add-tile:hover { background: var(--surface); color: var(--ink); }
-.add-tile .plus { font-size: 24px; line-height: 1; }
 
 /* ---- Manage: ticket-stub show cards -------------------------------------- */
 

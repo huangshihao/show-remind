@@ -52,7 +52,11 @@ subscribeRouter.post("/", async (c) => {
   const sub = await createPendingSubscription(c.env.DB, email, cities);
   // Merge into any existing list (a pending sub may already hold an earlier
   // playlist import) — replacing wholesale would silently wipe it.
-  let room = MAX_ARTISTS - (await countArtists(c.env.DB, sub.id));
+  // The cap is public-mode abuse protection only; self-host takes the whole
+  // playlist. Infinity keeps the merge path (existing + new) capped under
+  // PUBLIC_MODE, where the length check above only sees the incoming list.
+  let room =
+    c.env.PUBLIC_MODE === "1" ? MAX_ARTISTS - (await countArtists(c.env.DB, sub.id)) : Infinity;
   const newArtistIds: string[] = [];
   for (const name of artists) {
     if (room <= 0) break;

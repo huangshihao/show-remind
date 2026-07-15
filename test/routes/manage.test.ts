@@ -3,7 +3,7 @@ import { env } from "cloudflare:test";
 import { applySchema } from "../db/apply-schema";
 import { app } from "../../src/index";
 import { createPendingSubscription, activateByToken } from "../../src/db/subscriptions";
-import { setArtists, listArtists } from "../../src/db/subscription-artists";
+import { setArtists, listArtists, addArtistToSubscription } from "../../src/db/subscription-artists";
 import { upsertShow } from "../../src/db/shows";
 import { persistMatches } from "../../src/db/show-artists";
 import * as showstart from "@/lib/sources/showstart";
@@ -145,10 +145,9 @@ it("unknown token returns 404 everywhere", async () => {
   expect((await app.request("/api/manage/cities?token=nope", j({ cities: ["110000"] }), env)).status).toBe(404);
 });
 
-it("add and remove artists", async () => {
+it("remove artists", async () => {
   const sub = await activeSub();
-  const add = await app.request(`/api/manage/artists?token=${sub.token}`, j({ name: "海龟先生" }), env);
-  const { id } = (await add.json()) as any;
+  const id = await addArtistToSubscription(env.DB, sub.id, "海龟先生");
   expect((await listArtists(env.DB, sub.id)).length).toBe(2);
   const del = await app.request(`/api/manage/artists/${id}?token=${sub.token}`, { method: "DELETE" }, env);
   expect(del.status).toBe(200);
@@ -162,10 +161,25 @@ it("adding an artist links it to already-crawled upcoming shows", async () => {
     showTime: "2099-09-01T20:00:00", price: "200", url: "https://x/901", performers: ["海龟先生"],
     poster: null,
   });
-  await app.request(`/api/manage/artists?token=${sub.token}`, j({ name: "海龟先生" }), env);
+  vi.stubGlobal("fetch", vi.fn(async () =>
+    new Response(
+      JSON.stringify({
+        request: {
+          code: 0,
+          data: {
+            dirinfo: { title: "L" },
+            songlist_size: 1,
+            songlist: [{ name: "s1", singer: [{ name: "海龟先生" }] }],
+          },
+        },
+      }),
+    ),
+  ));
+  await app.request(`/api/manage/import?token=${sub.token}`, j({ link: "https://y.qq.com/n/ryqq/playlist/9" }), env);
   const res = await app.request(`/api/manage?token=${sub.token}`, {}, env);
   const body = (await res.json()) as any;
   expect(body.shows.map((s: any) => s.id)).toEqual([show.id]);
+  vi.unstubAllGlobals();
 });
 
 it("update cities validates the set", async () => {
@@ -217,6 +231,55 @@ it("import only counts newly-linked artists toward added/cap, not already-follow
   const secondBody = (await second.json()) as any;
   expect(secondBody.added).toBe(0);
   expect((await listArtists(env.DB, sub.id)).length).toBe(before + 2);
+
+  vi.unstubAllGlobals();
+});
+
+it("importing a second, different playlist merges and dedupes across playlists", async () => {
+  const sub = await activeSub();
+  const before = (await listArtists(env.DB, sub.id)).length;
+
+  function qqList(title: string, names: string[]) {
+    return new Response(
+      JSON.stringify({
+        request: {
+          code: 0,
+          data: {
+            dirinfo: { title },
+            songlist_size: names.length,
+            songlist: names.map((n, i) => ({ name: `s${i}`, singer: [{ name: n }] })),
+          },
+        },
+      }),
+    );
+  }
+
+  // 歌单 A：痛仰乐队 + 海龟先生
+  vi.stubGlobal("fetch", vi.fn(async () => qqList("A", ["痛仰乐队", "海龟先生"])));
+  const a = await app.request(
+    `/api/manage/import?token=${sub.token}`,
+    j({ link: "https://y.qq.com/n/ryqq/playlist/1" }),
+    env,
+  );
+  expect(((await a.json()) as any).added).toBe(2);
+
+  // 歌单 B：海龟先生（与 A 重叠）+ 达达乐队（新）
+  vi.stubGlobal("fetch", vi.fn(async () => qqList("B", ["海龟先生", "达达乐队"])));
+  const b = await app.request(
+    `/api/manage/import?token=${sub.token}`,
+    j({ link: "https://y.qq.com/n/ryqq/playlist/2" }),
+    env,
+  );
+  // 只有达达乐队是新的；海龟先生已被 A 带进来了
+  expect(((await b.json()) as any).added).toBe(1);
+
+  const names = (await listArtists(env.DB, sub.id)).map((x) => x.name);
+  expect(names).toContain("痛仰乐队");
+  expect(names).toContain("海龟先生");
+  expect(names).toContain("达达乐队");
+  // 重叠的海龟先生只有一条，没有变成两行
+  expect(names.filter((n) => n === "海龟先生").length).toBe(1);
+  expect(names.length).toBe(before + 3);
 
   vi.unstubAllGlobals();
 });
