@@ -1,3 +1,4 @@
+import { UPCOMING } from "./time";
 export interface UpcomingShow {
   id: string;
   title: string;
@@ -58,7 +59,7 @@ export async function findUpcomingShowsForSubscription(
        JOIN shows sh ON sh.id = xsa.show_id
        JOIN artists a ON a.id = sa.artist_id
        WHERE sa.subscription_id = ?
-         AND (sh.show_time IS NULL OR sh.show_time >= datetime('now'))`,
+         AND ${UPCOMING("sh.show_time")}`,
     )
     .bind(subscriptionId)
     .all<JoinRow>();

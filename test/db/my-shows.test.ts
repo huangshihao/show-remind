@@ -90,6 +90,36 @@ it("excludes a show outside the sub's cities", async () => {
   expect(shows.map((s) => s.id)).not.toContain(showOtherCity.id);
 });
 
+// show_time is Beijing wall-clock, but datetime('now') is UTC — so the filter was
+// comparing "2026-07-15T14:00:00" against "2026-07-15 07:02:07" as strings. It got
+// away with it across different dates, but on the SAME date the 'T' (0x54) always
+// sorts above the ' ' (0x20) separator, so a gig that started hours ago still read
+// as upcoming. Both sides must be normalised and in the same zone.
+it("excludes a show that started earlier today", async () => {
+  const { sub, artistId } = await setup();
+  const beijing = (offsetMs: number) =>
+    new Date(Date.now() + offsetMs + 8 * 60 * 60 * 1000).toISOString().slice(0, 19);
+  const startedAnHourAgo = await upsertShow(db(), {
+    showstartId: "400", title: "一小时前开演", cityCode: "110000", venue: "MAO",
+    showTime: beijing(-60 * 60 * 1000), price: null, url: "https://x/400",
+    performers: ["刺猬"], poster: null,
+  });
+  const startsInAnHour = await upsertShow(db(), {
+    showstartId: "401", title: "一小时后开演", cityCode: "110000", venue: "MAO",
+    showTime: beijing(60 * 60 * 1000), price: null, url: "https://x/401",
+    performers: ["刺猬"], poster: null,
+  });
+  await persistMatches(db(), [
+    { showId: startedAnHourAgo.id, artistId, matchedBy: "performer" },
+    { showId: startsInAnHour.id, artistId, matchedBy: "performer" },
+  ]);
+
+  const ids = (await findUpcomingShowsForSubscription(db(), sub.id)).map((s) => s.id);
+
+  expect(ids).not.toContain(startedAnHourAgo.id);
+  expect(ids).toContain(startsInAnHour.id);
+});
+
 it("excludes a show that already happened", async () => {
   const { sub, artistId } = await setup();
   const pastShow = await upsertShow(db(), {

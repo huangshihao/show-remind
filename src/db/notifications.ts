@@ -1,3 +1,4 @@
+import { UPCOMING } from "./time";
 export interface NotifyShow {
   showId: string;
   title: string;
@@ -47,11 +48,8 @@ export async function findNotifyCandidates(db: D1Database): Promise<Candidate[]>
        JOIN shows sh ON sh.id = xsa.show_id
        JOIN artists a ON a.id = sa.artist_id
        WHERE s.status = 'active'
-         -- Never remind about a gig that has already happened. NULL show_time
-         -- means the date was an unparseable range (typically a festival), which
-         -- is still upcoming as far as we know — keep those. Mirrors the same
-         -- condition in findUpcomingShowsForSubscription.
-         AND (sh.show_time IS NULL OR sh.show_time >= datetime('now'))
+         -- Never remind about a gig that has already happened.
+         AND ${UPCOMING("sh.show_time")}
          AND NOT EXISTS (
            SELECT 1 FROM notifications n
            WHERE n.subscription_id = s.id AND n.show_id = sh.id
