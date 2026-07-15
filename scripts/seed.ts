@@ -17,10 +17,17 @@
 //   mise x node@22 -- npx vite-node scripts/seed.ts
 //
 // Flags:
-//   --cities=a,b   only these 行政区码 (default: every city in lib/cities.ts)
-//   --limit=N      at most N new shows per city (default: unlimited)
-//   --dry-run      crawl + match + write the .sql, but do not touch D1
-//   --db=NAME      D1 database name (default: show-remind)
+//   --cities=a,b     only these 行政区码 (default: every city in lib/cities.ts)
+//   --limit=N        at most N new shows per city (default: unlimited)
+//   --dry-run        crawl + match + write the .sql, but do not touch D1
+//   --db=NAME        D1 database name (default: show-remind)
+//   --repair-times   re-fetch shows stored with no show_time and fill it in from
+//                    showStartTime, then exit. For rows written before the
+//                    crawler read the epoch fields: their showTime was a date
+//                    range the display-string regex could not parse, so they
+//                    were stored NULL and read as "upcoming" forever. Normal
+//                    seeding skips shows it already has, so those rows can only
+//                    be fixed by asking for them explicitly.
 
 import { execFileSync } from "node:child_process";
 import { writeFileSync, mkdtempSync } from "node:fs";
@@ -134,9 +141,36 @@ function showsSql(rows: Array<ShowDetail & { rowId: string }>): string {
     .join("\n");
 }
 
+// Re-fetch every show we stored without a time and fill it in from showStartTime.
+async function repairTimes(): Promise<void> {
+  const undated = d1Query<{ showstart_id: string; title: string }>(
+    "SELECT showstart_id, title FROM shows WHERE show_time IS NULL",
+  );
+  console.log(`${undated.length} shows stored with no show_time\n`);
+  if (undated.length === 0) return;
+
+  const details = await fetchDetails(undated.map((s) => s.showstart_id), "repair");
+  const dated = details.filter((d) => d.showTime !== null);
+  console.log(`\nrecovered a time for ${dated.length} of ${details.length} re-fetched`);
+  if (dated.length === 0 || DRY_RUN) {
+    if (DRY_RUN) console.log("[dry-run] not applied");
+    return;
+  }
+  d1ExecFile(
+    dated
+      .map((d) => `UPDATE shows SET show_time=${q(d.showTime)} WHERE showstart_id=${q(d.showstartId)};`)
+      .join("\n"),
+  );
+  console.log("Done.");
+}
+
 // --- main -------------------------------------------------------------------
 
 async function main() {
+  if (has("repair-times")) {
+    console.log(`Repairing missing show times in "${DB}"${DRY_RUN ? " (dry run)" : ""}\n`);
+    return repairTimes();
+  }
   console.log(`Seeding ${targets.length} cities into "${DB}"${DRY_RUN ? " (dry run)" : ""}\n`);
 
   console.log("1. Reading what D1 already has…");
