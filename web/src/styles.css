@@ -316,8 +316,6 @@ button { font-family: inherit; }
 .platform-note span { display: inline-flex; align-items: center; gap: 5px; }
 .platform-note b { color: var(--ink-soft); font-weight: 700; }
 
-.or-skip { text-align: center; margin-top: 6px; }
-
 /* ---- Artist select grid (wizard step 1) ---------------------------------- */
 
 .artist-grid {
