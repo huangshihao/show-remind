@@ -284,6 +284,12 @@ export function ImportPlaylist({
       const res = await importPlaylist(v, token, tsToken || undefined);
       setDone(`新增 ${res.added} 位音乐人`);
       setLink("");
+      // Turnstile tokens are single-use: siteverify already consumed this
+      // one. Clear it and re-render the widget so the next import (this
+      // page supports importing several playlists in a row) gets a fresh
+      // token via the onToken callback below.
+      setTsToken("");
+      (window as any).turnstile?.reset?.();
       onImported(res.artists);
     } catch (e) {
       setErr((e as Error).message);

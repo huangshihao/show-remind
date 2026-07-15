@@ -120,7 +120,7 @@ manageRouter.post("/import", async (c) => {
   try {
     resolved = await resolvePlaylist(link);
   } catch {
-    return c.json({ error: "歌单解析失败，请稍后重试或手动添加" }, 502);
+    return c.json({ error: "歌单解析失败，请稍后重试" }, 502);
   }
   // Public-mode abuse protection only — self-host imports the whole playlist.
   const cap =

@@ -23,7 +23,7 @@ resolveRouter.post("/", async (c) => {
   try {
     const result = await resolvePlaylist(link);
     if (result.artists.length === 0) {
-      return c.json({ error: "没有从歌单里解析到艺人，换个歌单或手动添加" }, 422);
+      return c.json({ error: "没有从歌单里解析到艺人，换个歌单试试" }, 422);
     }
     return c.json(result);
   } catch (err) {

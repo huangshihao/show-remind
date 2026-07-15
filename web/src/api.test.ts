@@ -23,11 +23,11 @@ it("posts the link to the manage import route with the token in the query", asyn
 
 it("surfaces the server error message instead of a generic failure", async () => {
   vi.stubGlobal("fetch", vi.fn(async () =>
-    new Response(JSON.stringify({ error: "歌单解析失败，请稍后重试或手动添加" }), {
+    new Response(JSON.stringify({ error: "歌单解析失败，请稍后重试" }), {
       status: 502,
       headers: { "content-type": "application/json" },
     }),
   ));
 
-  await expect(importPlaylist("https://x/1", "tok")).rejects.toThrow("歌单解析失败，请稍后重试或手动添加");
+  await expect(importPlaylist("https://x/1", "tok")).rejects.toThrow("歌单解析失败，请稍后重试");
 });
