@@ -36,3 +36,37 @@ it("sends one reminder per candidate and marks shows sent", async () => {
   expect((await runNotifications(env.DB, typedEnv)).sent).toBe(0);
   vi.unstubAllGlobals();
 });
+
+// A reminder for a gig that already happened is worse than no reminder. The
+// listing is normally upcoming-only, but the search API will happily serve shows
+// from years back (sortType 4/5 return 2023 dates), so the guard belongs here
+// rather than resting on an assumption about the crawler's input.
+it("never reminds about a show that has already happened", async () => {
+  const sub = await createPendingSubscription(env.DB, "past@b.com", ["110000"]);
+  await activateByToken(env.DB, sub.token);
+  const artistId = await addArtistToSubscription(env.DB, sub.id, "刺猬");
+  const gone = await upsertShow(env.DB, {
+    showstartId: "past", title: "去年的演出", cityCode: "110000", venue: "MAO",
+    showTime: "2023-08-01T20:00:00", price: "180", url: "https://x/past", performers: ["刺猬"],
+    poster: null,
+  });
+  await persistMatches(env.DB, [{ showId: gone.id, artistId, matchedBy: "performer" }]);
+
+  expect((await runNotifications(env.DB, typedEnv)).sent).toBe(0);
+});
+
+// A festival's showTime can be an unparseable date range ("2026.09.04－09.06"),
+// which normalizeShowTime turns into null. Those are still upcoming as far as we
+// know, so they must not be silently dropped by the date filter.
+it("still reminds about a show whose date could not be parsed", async () => {
+  const sub = await createPendingSubscription(env.DB, "tbd@b.com", ["110000"]);
+  await activateByToken(env.DB, sub.token);
+  const artistId = await addArtistToSubscription(env.DB, sub.id, "刺猬");
+  const undated = await upsertShow(env.DB, {
+    showstartId: "tbd", title: "音乐节", cityCode: "110000", venue: null,
+    showTime: null, price: null, url: "https://x/tbd", performers: ["刺猬"], poster: null,
+  });
+  await persistMatches(env.DB, [{ showId: undated.id, artistId, matchedBy: "performer" }]);
+
+  expect((await runNotifications(env.DB, typedEnv)).sent).toBe(1);
+});

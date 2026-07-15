@@ -29,7 +29,6 @@ it("finds a candidate for an active sub with a matched show in its city", async 
   expect(cands.length).toBe(1);
   expect(cands[0].shows.map((s) => s.showId)).toEqual([show.id]);
   expect(cands[0].shows[0].artistNames).toEqual(["刺猬"]);
-  expect(cands[0].shows[0].hasTitleOnlyMatch).toBe(false);
   expect(cands[0].shows[0].poster).toBe("https://s2.showstart.com/100.jpg");
 });
 

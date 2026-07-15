@@ -45,7 +45,6 @@ export function reminderEmail(
   const rows = shows
     .map((s) => {
       const when = s.showTime ? s.showTime.slice(0, 16).replace("T", " ") : "待定";
-      const maybe = s.hasTitleOnlyMatch ? "(可能相关) " : "";
       const artists = s.artistNames.map(escapeHtml).join(" / ");
       const venue = escapeHtml(s.venue ?? "待定");
       const price = escapeHtml(s.price ?? "待定");
@@ -53,7 +52,7 @@ export function reminderEmail(
       const poster = s.poster
         ? `<img src="${escapeHtml(posterThumb(s.poster))}" alt="" width="160" style="max-width:160px;height:auto;border-radius:8px;display:block;margin-bottom:6px"/>`
         : "";
-      return `<li>${poster}<b>${maybe}${artists}</b> — ${escapeHtml(s.title)}<br/>
+      return `<li>${poster}<b>${artists}</b> — ${escapeHtml(s.title)}<br/>
         场馆:${venue} · 时间:${escapeHtml(when)} · 票价:${price}<br/>
         <a href="${url}">${url}</a></li>`;
     })
