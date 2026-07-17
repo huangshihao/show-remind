@@ -3,6 +3,7 @@ import { env } from "cloudflare:test";
 import { applySchema } from "../db/apply-schema";
 import { app } from "../../src/index";
 import * as showstart from "@/lib/sources/showstart";
+import * as run from "../../src/pipeline/run";
 import { createPendingSubscription, activateByToken } from "../../src/db/subscriptions";
 import { addArtistToSubscription } from "../../src/db/subscription-artists";
 import { upsertShow } from "../../src/db/shows";
@@ -40,6 +41,20 @@ it("fails closed when INTERNAL_SECRET is unset (empty)", async () => {
     { ...env, INTERNAL_SECRET: "" },
   );
   expect(res.status).toBe(403);
+});
+
+it("crawl-sweep endpoint rejects without the secret, runs the sweep with it", async () => {
+  expect((await app.request("/internal/crawl-sweep", { method: "POST" }, env)).status).toBe(403);
+
+  const sweep = vi.spyOn(run, "runCrawl").mockResolvedValue();
+  const res = await app.request(
+    "/internal/crawl-sweep",
+    { method: "POST", headers: { "x-internal-secret": "test-internal" } },
+    env,
+  );
+  expect(res.status).toBe(200);
+  expect(sweep).toHaveBeenCalledTimes(1);
+  vi.restoreAllMocks();
 });
 
 it("notify endpoint rejects without the secret, runs the reminder pipeline with it", async () => {

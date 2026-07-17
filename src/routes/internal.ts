@@ -3,6 +3,7 @@ import type { Env } from "../env";
 import { crawlCity } from "../pipeline/crawl";
 import { matchNewShows } from "../pipeline/match";
 import { runNotifications } from "../pipeline/notify";
+import { runCrawl } from "../pipeline/run";
 import { deleteStalePending } from "../db/notifications";
 
 export const internalRouter = new Hono<{ Bindings: Env }>();
@@ -20,6 +21,16 @@ internalRouter.post("/notify", async (c) => {
   const result = await runNotifications(c.env.DB, c.env);
   await deleteStalePending(c.env.DB, 48);
   return c.json(result);
+});
+
+// Manual trigger for the nightly city sweep — same work as the 02:00 UTC cron
+// (see runCrawl). Lets an operator verify the self-fetch fan-out end-to-end
+// right after a deploy instead of waiting for tonight's run; success/failure
+// lands in the city_failure_streaks meta row like any cron run.
+internalRouter.post("/crawl-sweep", async (c) => {
+  if (!authorized(c)) return c.text("forbidden", 403);
+  await runCrawl(c.env);
+  return c.json({ ok: true });
 });
 
 internalRouter.get("/crawl", async (c) => {
