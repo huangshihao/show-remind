@@ -3,7 +3,14 @@
   "name": "show-remind",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-01",
-  "compatibility_flags": ["nodejs_compat"],
+  // global_fetch_strictly_public: runCrawl fans out by fetching this Worker's OWN
+  // custom domain (APP_BASE_URL/internal/crawl). Without this flag, a same-zone
+  // fetch skips Workers routing and goes to the zone's "origin" — which for a
+  // Custom Domain is a placeholder, so every self-call dies with 522 and the
+  // nightly sweep fails for all cities. With the flag, the fetch loops back
+  // through Cloudflare's front door and re-invokes this Worker like any public
+  // request (each city still gets its own invocation + subrequest budget).
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "observability": { "enabled": true },
   "assets": {
     "directory": "./dist",

@@ -28,9 +28,21 @@ export async function runCrawl(env: Env): Promise<void> {
       const resp = await fetch(`${env.APP_BASE_URL}/internal/crawl?city=${city}`, {
         headers: { "x-internal-secret": env.INTERNAL_SECRET },
       });
-      if (!resp.ok) throw new Error(`crawl ${city} responded ${resp.status}`);
+      if (!resp.ok) {
+        // Include a body snippet: a bare status hides the difference between
+        // "crawlCity threw" (JSON error) and an edge-level failure like the
+        // 522 every self-fetch returned before global_fetch_strictly_public.
+        const body = await resp.text().catch(() => "<unreadable>");
+        throw new Error(`crawl ${city} responded ${resp.status}: ${body.slice(0, 120)}`);
+      }
     }),
   );
+  // Log each rejection reason: the alert email only carries city codes, so
+  // without this line the WHY of a failed sweep is unrecoverable afterwards
+  // (this is how the 2026-07 "all 32 cities down" incident stayed opaque).
+  results.forEach((r, i) => {
+    if (r.status === "rejected") console.log(`runCrawl ${cities[i]} failed: ${String(r.reason)}`);
+  });
   const failedCities = cities.filter((_city, i) => results[i].status === "rejected");
   await maybeAlertAdmin(env.DB, env, failedCities, cities);
 }
