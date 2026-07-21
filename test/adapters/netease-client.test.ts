@@ -74,4 +74,30 @@ describe("netease plaintext client", () => {
       /netease.*non-JSON.*status=200/
     );
   });
+
+  // Overseas (Cloudflare / GitHub Actions) egress gets intermittent risk
+  // control: HTTP 200 with a valid JSON body but code!==200 and no data. The
+  // status/empty/non-JSON guards all miss it, so it used to slip through as a
+  // silent empty playlist (issue #3). It must throw so callers retry/fail loud.
+  it("throws when netease answers HTTP 200 with a risk-control body (code !== 200)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ code: -460, message: "网络繁忙，请稍后重试" }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchPlaylistDetailRaw("123")).rejects.toThrow(
+      /netease.*risk-control.*code=-460/
+    );
+  });
+
+  // Success responses always carry code:200, but the guard stays lenient on a
+  // missing code so it never rejects a body that simply omits it.
+  it("passes a body that carries no code field", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ playlist: { name: "N" } }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchPlaylistDetailRaw("123")).resolves.toEqual({ playlist: { name: "N" } });
+  });
 });

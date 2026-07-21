@@ -72,10 +72,26 @@ describe("resolveNeteasePlaylist", () => {
     expect(songSpy).toHaveBeenCalledTimes(1); // 3 ids -> 1 batch
   });
 
-  it("throws if a song batch fails (no partial data)", async () => {
+  it("retries a transient netease failure on a song batch and still resolves the songs", async () => {
     vi.spyOn(client, "fetchPlaylistDetailRaw").mockResolvedValue(playlistDetail);
-    vi.spyOn(client, "fetchSongDetailRaw").mockRejectedValue(new Error("risk control"));
-    await expect(resolveNeteasePlaylist("999")).rejects.toThrow("risk control");
+    const songSpy = vi
+      .spyOn(client, "fetchSongDetailRaw")
+      .mockRejectedValueOnce(new Error("netease risk-control code=-460"))
+      .mockResolvedValue(songDetail);
+    const r = await resolveNeteasePlaylist("999", new SubrequestBudget(), { sleepFn: async () => {} });
+    expect(r.songs).toHaveLength(3);
+    expect(songSpy).toHaveBeenCalledTimes(2); // failed once, retried, then succeeded
+  });
+
+  it("throws if a song batch keeps failing after retries (no partial data)", async () => {
+    vi.spyOn(client, "fetchPlaylistDetailRaw").mockResolvedValue(playlistDetail);
+    const songSpy = vi
+      .spyOn(client, "fetchSongDetailRaw")
+      .mockRejectedValue(new Error("risk control"));
+    await expect(
+      resolveNeteasePlaylist("999", new SubrequestBudget(), { sleepFn: async () => {} }),
+    ).rejects.toThrow("risk control");
+    expect(songSpy).toHaveBeenCalledTimes(3); // 1 initial + 2 retries, then gives up
   });
 
   it("stops fetching song batches when the subrequest budget runs out, keeping songs so far", async () => {
