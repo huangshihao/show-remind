@@ -20,11 +20,22 @@ async function post(url: string, form: Record<string, string>): Promise<any> {
   if (!resp.ok || text.length === 0) {
     throw new Error(`netease ${url} responded status=${resp.status} len=${text.length}`);
   }
+  let json: any;
   try {
-    return JSON.parse(text);
+    json = JSON.parse(text);
   } catch {
     throw new Error(`netease ${url} non-JSON body status=${resp.status}`);
   }
+  // Overseas egress (Cloudflare / CI) gets intermittent risk control: the
+  // request answers 200 with a valid JSON body but a non-200 `code` and no
+  // data (e.g. -460 "网络繁忙"). Success always carries code:200, so treat any
+  // explicit non-200 code as a (transient, retryable) failure rather than
+  // letting it slip through as a silent empty result. A body that omits code
+  // is left alone.
+  if (typeof json?.code === "number" && json.code !== 200) {
+    throw new Error(`netease ${url} risk-control code=${json.code} status=${resp.status}`);
+  }
+  return json;
 }
 
 export async function fetchPlaylistDetailRaw(externalId: string): Promise<any> {
